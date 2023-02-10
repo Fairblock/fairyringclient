@@ -2,17 +2,13 @@ package main
 
 import (
 	distIBE "DistributedIBE"
-	"bytes"
 	"context"
+	"encoding/hex"
 	"fairyring/x/fairyring/types"
-	"fmt"
-	"github.com/drand/kyber"
 	bls "github.com/drand/kyber-bls12381"
-	"github.com/drand/kyber/pairing"
 	"github.com/ignite/cli/ignite/pkg/cosmosaccount"
 	"github.com/ignite/cli/ignite/pkg/cosmosclient"
 	"log"
-	"math/big"
 	"os"
 	"strings"
 
@@ -32,34 +28,6 @@ const Threshold = 1
 const IBEId = "Random_IBE_ID"
 
 const AddressPrefix = "cosmos"
-
-func bigFromHex(hex string) *big.Int {
-	if len(hex) > 1 && hex[:2] == "0x" {
-		hex = hex[2:]
-	}
-	n, _ := new(big.Int).SetString(hex, 16)
-	return n
-}
-
-func h3(s pairing.Suite, sigma, msg []byte) (kyber.Scalar, error) {
-	h3 := s.Hash()
-
-	if _, err := h3.Write(distIBE.H3Tag()); err != nil {
-		return nil, fmt.Errorf("err hashing h3 tag: %v", err)
-	}
-	if _, err := h3.Write(sigma); err != nil {
-		return nil, fmt.Errorf("err hashing sigma: %v", err)
-	}
-	_, _ = h3.Write(msg)
-	hashable, ok := s.G1().Scalar().(kyber.HashableScalar)
-	if !ok {
-		panic("scalar can't be created from hash")
-	}
-
-	h3Reader := bytes.NewReader(h3.Sum(nil))
-
-	return hashable.Hash(s, h3Reader)
-}
 
 func main() {
 	// Create the cosmos client
@@ -120,8 +88,8 @@ func main() {
 	// Setup
 	s := bls.NewBLS12381Suite()
 	var secretVal []byte = []byte{187}
-	var qBig = bigFromHex("0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001")
-	secret, _ := h3(s, secretVal, []byte("This is the secret message"))
+	var qBig = distIBE.BigFromHex("0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001")
+	secret, _ := distIBE.H3(s, secretVal, []byte("This is the secret message"))
 
 	for {
 		select {
@@ -167,17 +135,24 @@ func main() {
 					log.Fatal(err)
 				}
 
+				out, err := sk[i].GetSk().MarshalBinary()
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				hexKey := hex.EncodeToString(out)
+
 				broadcastMsg := &types.MsgSendKeyshare{
 					Creator:       eachAddress,
-					Message:       sk[i].GetSk().String(),
+					Message:       hexKey,
 					KeyShareIndex: uint64(sk[i].GetIndex()),
-					BlockHeight:   uint64(height) + 1,
+					BlockHeight:   uint64(height) + 2,
 				}
 				_, err = cosmos.BroadcastTx(context.Background(), eachValidatorAccount, broadcastMsg)
 				if err != nil {
 					log.Fatal(err)
 				}
-				log.Printf("Sent KeyShare at Block Height: %d | Key: %s | Index: %d \n", height, sk[i].GetSk().String(), sk[i].GetIndex())
+				log.Printf("Sent KeyShare at Block Height: %d | Key: %s | Index: %d \n", height, hexKey, sk[i].GetIndex())
 			}
 		}
 	}
