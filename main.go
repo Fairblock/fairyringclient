@@ -135,7 +135,7 @@ func main() {
 					log.Fatal(err)
 				}
 
-				out, err := sk[i].GetSk().MarshalBinary()
+				out, err := sk[i].Sk.MarshalBinary()
 				if err != nil {
 					log.Fatal(err)
 				}
@@ -152,7 +152,7 @@ func main() {
 					Creator:       eachAddress,
 					Message:       hexKey,
 					Commitment:    hexCommitment,
-					KeyShareIndex: uint64(sk[i].GetIndex()),
+					KeyShareIndex: uint64(sk[i].Index),
 					BlockHeight:   uint64(height) + 2,
 				}
 				log.Printf("Broadcasting")
@@ -160,7 +160,7 @@ func main() {
 				if err != nil {
 					log.Fatal(err)
 				}
-				log.Printf("\nSent KeyShare at Block Height: %d\nKey: %s\nCommitment: %s\nKey Index: %d Commitment Index: %d\n", height, hexKey, hexCommitment, sk[i].GetIndex(), c[i].Index)
+				log.Printf("\nSent KeyShare at Block Height: %d\nKey: %s\nCommitment: %s\nKey Index: %d Commitment Index: %d\n", height, hexKey, hexCommitment, sk[i].Index, c[i].Index)
 			}
 		}
 	}
