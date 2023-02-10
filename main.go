@@ -14,6 +14,7 @@ import (
 	"log"
 	"math/big"
 	"os"
+	"strings"
 
 	tmclient "github.com/tendermint/tendermint/rpc/client/http"
 	tmtypes "github.com/tendermint/tendermint/types"
@@ -95,12 +96,14 @@ func main() {
 			Creator: addr,
 		}
 
-		txResp, err := cosmos.BroadcastTx(context.Background(), account, msg)
+		_, err = cosmos.BroadcastTx(context.Background(), account, msg)
 		if err != nil {
-			log.Fatal(err)
+			if !strings.Contains(err.Error(), "validator already registered") {
+				log.Fatal(err)
+			}
 		}
 
-		log.Printf("%s's RegisterValidator response: %s", eachAccountName, txResp)
+		log.Printf("%s's Registered as Validator", eachAccountName)
 	}
 
 	query := "tm.event = 'NewBlockHeader'"
@@ -131,8 +134,7 @@ func main() {
 		//	os.Exit(0)
 		case result := <-out:
 			height := result.Data.(tmtypes.EventDataNewBlockHeader).Header.Height
-			log.Println("Got new block", "height:", height)
-			log.Println("Sending next height")
+			log.Println("Got new block height: ", height)
 
 			// generating secret shares
 			shares, _ := distIBE.GenerateShares(uint32(TotalValidatorNumber), uint32(Threshold), secret, qBig)
@@ -159,10 +161,6 @@ func main() {
 				sk = append(sk, distIBE.Extract(s, shares[k].Value, uint32(k+1), []byte(IBEId)))
 			}
 
-			for _, eachKey := range sk {
-				log.Printf("Block Height: %d | Each Key: %s | Index: %d \n", height, eachKey.GetSk().String(), eachKey.GetIndex())
-			}
-
 			for i, eachValidatorAccount := range validatorAccountList {
 				eachAddress, err := eachValidatorAccount.Address(AddressPrefix)
 				if err != nil {
@@ -179,7 +177,7 @@ func main() {
 				if err != nil {
 					log.Fatal(err)
 				}
-				fmt.Printf("Address '%s' Sent Keyshare\n", eachAddress)
+				log.Printf("Sent KeyShare at Block Height: %d | Key: %s | Index: %d \n", height, sk[i].GetSk().String(), sk[i].GetIndex())
 			}
 		}
 	}
