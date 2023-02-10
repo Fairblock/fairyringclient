@@ -140,19 +140,27 @@ func main() {
 					log.Fatal(err)
 				}
 
+				cOut, err := c[i].Sp.MarshalBinary()
+				if err != nil {
+					log.Fatal(err)
+				}
+
 				hexKey := hex.EncodeToString(out)
+				hexCommitment := hex.EncodeToString(cOut)
 
 				broadcastMsg := &types.MsgSendKeyshare{
 					Creator:       eachAddress,
 					Message:       hexKey,
+					Commitment:    hexCommitment,
 					KeyShareIndex: uint64(sk[i].GetIndex()),
 					BlockHeight:   uint64(height) + 2,
 				}
+				log.Printf("Broadcasting")
 				_, err = cosmos.BroadcastTx(context.Background(), eachValidatorAccount, broadcastMsg)
 				if err != nil {
 					log.Fatal(err)
 				}
-				log.Printf("Sent KeyShare at Block Height: %d | Key: %s | Index: %d \n", height, hexKey, sk[i].GetIndex())
+				log.Printf("\nSent KeyShare at Block Height: %d\nKey: %s\nCommitment: %s\nKey Index: %d Commitment Index: %d\n", height, hexKey, hexCommitment, sk[i].GetIndex(), c[i].Index)
 			}
 		}
 	}
