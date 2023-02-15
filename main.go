@@ -4,6 +4,7 @@ import (
 	distIBE "DistributedIBE"
 	"context"
 	"encoding/hex"
+	fbTypes "fairyring/x/fairblock/types"
 	"fairyring/x/fairyring/types"
 	bls "github.com/drand/kyber-bls12381"
 	"github.com/ignite/cli/ignite/pkg/cosmosaccount"
@@ -21,13 +22,14 @@ var (
 	interrupt chan os.Signal
 )
 
-var ValidatorNameList = []string{"alice"} //, "bob"}
+var ValidatorNameList = []string{"alice", "bob"}
 var TotalValidatorNumber = len(ValidatorNameList)
 
-const Threshold = 1
+const Threshold = 2
 const IBEId = "Random_IBE_ID"
 
 const AddressPrefix = "cosmos"
+const AuctionAddressPrefix = "auction"
 
 func main() {
 	// Create the cosmos client
@@ -39,11 +41,32 @@ func main() {
 		log.Fatal(err)
 	}
 
+	auctionCosmos, err := cosmosclient.New(
+		context.Background(),
+		cosmosclient.WithAddressPrefix(AuctionAddressPrefix),
+		cosmosclient.WithHome("~/.destination_auction/"),
+		cosmosclient.WithNodeAddress("tcp://localhost:26659"),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	client, err := tmclient.New("http://localhost:26657", "/websocket")
 	err = client.Start()
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	auctionAlice, err := auctionCosmos.Account("alice")
+	if err != nil {
+		log.Fatal(err)
+	}
+	auctionAliceAddress, err := auctionAlice.Address(AuctionAddressPrefix)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Printf("\nGot Auction Alice Address %s", auctionAliceAddress)
 
 	validatorAccountList := make([]cosmosaccount.Account, TotalValidatorNumber)
 	for i, eachAccountName := range ValidatorNameList {
@@ -80,9 +103,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	//quit := make(chan os.Signal)
-	//signal.Notify(quit, os.Interrupt)
-
 	defer client.Stop()
 
 	// Setup
@@ -90,16 +110,10 @@ func main() {
 	var secretVal []byte = []byte{187}
 	var qBig = distIBE.BigFromHex("0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001")
 	secret, _ := distIBE.H3(s, secretVal, []byte("This is the secret message"))
+	publicKey := s.G1().Point().Mul(secret, s.G1().Point().Base())
 
 	for {
 		select {
-		//case <-quit:
-		//	log.Println("Terminate, closing all connections")
-		//	err = client.UnsubscribeAll(context.Background(), query)
-		//	if err != nil {
-		//		log.Println("Error closing websocket: ", err)
-		//	}
-		//	os.Exit(0)
 		case result := <-out:
 			height := result.Data.(tmtypes.EventDataNewBlockHeader).Header.Height
 			log.Println("Got new block height: ", height)
@@ -108,10 +122,11 @@ func main() {
 			shares, _ := distIBE.GenerateShares(uint32(TotalValidatorNumber), uint32(Threshold), secret, qBig)
 
 			// Public Key
-			// PK := s.G1().Point().Mul(secret, s.G1().Point().Base())
+			binary, _ := publicKey.MarshalBinary()
+
+			log.Println("\nPublic Key: ", hex.EncodeToString(binary))
 
 			// Generating commitments
-
 			var c []distIBE.Commitment
 			for j := 0; j < TotalValidatorNumber; j++ {
 				c = append(c, distIBE.Commitment{
@@ -129,39 +144,66 @@ func main() {
 				sk = append(sk, distIBE.Extract(s, shares[k].Value, uint32(k+1), []byte(IBEId)))
 			}
 
-			for i, eachValidatorAccount := range validatorAccountList {
-				eachAddress, err := eachValidatorAccount.Address(AddressPrefix)
-				if err != nil {
-					log.Fatal(err)
-				}
+			aggregated, _ := distIBE.AggregateSK(s, sk, c, []byte(IBEId))
 
-				out, err := sk[i].Sk.MarshalBinary()
-				if err != nil {
-					log.Fatal(err)
-				}
-
-				cOut, err := c[i].Sp.MarshalBinary()
-				if err != nil {
-					log.Fatal(err)
-				}
-
-				hexKey := hex.EncodeToString(out)
-				hexCommitment := hex.EncodeToString(cOut)
-
-				broadcastMsg := &types.MsgSendKeyshare{
-					Creator:       eachAddress,
-					Message:       hexKey,
-					Commitment:    hexCommitment,
-					KeyShareIndex: uint64(sk[i].Index),
-					BlockHeight:   uint64(height) + 2,
-				}
-				log.Printf("Broadcasting")
-				_, err = cosmos.BroadcastTx(context.Background(), eachValidatorAccount, broadcastMsg)
-				if err != nil {
-					log.Fatal(err)
-				}
-				log.Printf("\nSent KeyShare at Block Height: %d\nKey: %s\nCommitment: %s\nKey Index: %d Commitment Index: %d\n", height, hexKey, hexCommitment, sk[i].Index, c[i].Index)
+			aggregatedBytes, err := aggregated.MarshalBinary()
+			if err != nil {
+				log.Fatal(err)
 			}
+
+			hexAggregated := hex.EncodeToString(aggregatedBytes)
+			log.Printf("\nHeight: %d, Aggregated: %s\n", uint64(height), hexAggregated)
+
+			broadcastMsg := &fbTypes.MsgCreateAggregatedKeyShare{
+				Creator: auctionAliceAddress,
+				Data:    hexAggregated,
+				Height:  uint64(height),
+			}
+
+			_, err = auctionCosmos.BroadcastTx(
+				context.Background(),
+				auctionAlice,
+				broadcastMsg,
+			)
+
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			log.Printf("\nHeight: %d, Submitted\n", uint64(height))
+			//for i, eachValidatorAccount := range validatorAccountList {
+			//	eachAddress, err := eachValidatorAccount.Address(AddressPrefix)
+			//	if err != nil {
+			//		log.Fatal(err)
+			//	}
+			//
+			//	out, err := sk[i].Sk.MarshalBinary()
+			//	if err != nil {
+			//		log.Fatal(err)
+			//	}
+			//
+			//	cOut, err := c[i].Sp.MarshalBinary()
+			//	if err != nil {
+			//		log.Fatal(err)
+			//	}
+			//
+			//	hexKey := hex.EncodeToString(out)
+			//	hexCommitment := hex.EncodeToString(cOut)
+
+			//broadcastMsg := &types.MsgSendKeyshare{
+			//	Creator:       eachAddress,
+			//	Message:       hexKey,
+			//	Commitment:    hexCommitment,
+			//	KeyShareIndex: uint64(sk[i].Index),
+			//	BlockHeight:   uint64(height) + 1,
+			//}
+			//// log.Printf("Broadcasting")
+			//_, err = cosmos.BroadcastTx(context.Background(), eachValidatorAccount, broadcastMsg)
+			//if err != nil {
+			//	log.Fatal(err)
+			//}
+			//log.Printf("\nSent KeyShare at Block Height: %d\nKey: %s\nCommitment: %s\nKey Index: %d Commitment Index: %d\n", height, hexKey, hexCommitment, sk[i].Index, c[i].Index)
+			// }
 		}
 	}
 }
