@@ -22,10 +22,10 @@ var (
 	interrupt chan os.Signal
 )
 
-var ValidatorNameList = []string{"alice", "bob"}
+var ValidatorNameList = []string{"alice"} // , "bob"}
 var TotalValidatorNumber = len(ValidatorNameList)
 
-const Threshold = 2
+const Threshold = 1
 const IBEId = "Random_IBE_ID"
 
 const AddressPrefix = "cosmos"
@@ -57,7 +57,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	auctionAlice, err := auctionCosmos.Account("alice")
+	auctionAlice, err := auctionCosmos.Account("bob")
 	if err != nil {
 		log.Fatal(err)
 	}
