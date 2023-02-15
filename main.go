@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	fbTypes "fairyring/x/fairblock/types"
 	"fairyring/x/fairyring/types"
+	"fmt"
 	bls "github.com/drand/kyber-bls12381"
 	"github.com/ignite/cli/ignite/pkg/cosmosaccount"
 	"github.com/ignite/cli/ignite/pkg/cosmosclient"
@@ -116,15 +117,17 @@ func main() {
 		select {
 		case result := <-out:
 			height := result.Data.(tmtypes.EventDataNewBlockHeader).Header.Height
+			fmt.Println("")
 			log.Println("Got new block height: ", height)
 
 			// generating secret shares
 			shares, _ := distIBE.GenerateShares(uint32(TotalValidatorNumber), uint32(Threshold), secret, qBig)
 
 			// Public Key
-			binary, _ := publicKey.MarshalBinary()
+			publicKeyBytes, _ := publicKey.MarshalBinary()
+			publicKeyHex := hex.EncodeToString(publicKeyBytes)
 
-			log.Println("\nPublic Key: ", hex.EncodeToString(binary))
+			log.Println("Public Key: ", publicKeyHex)
 
 			// Generating commitments
 			var c []distIBE.Commitment
@@ -152,7 +155,6 @@ func main() {
 			}
 
 			hexAggregated := hex.EncodeToString(aggregatedBytes)
-			log.Printf("\nHeight: %d, Aggregated: %s\n", uint64(height), hexAggregated)
 
 			broadcastMsg := &fbTypes.MsgCreateAggregatedKeyShare{
 				Creator: auctionAliceAddress,
@@ -170,7 +172,8 @@ func main() {
 				log.Fatal(err)
 			}
 
-			log.Printf("\nHeight: %d, Submitted\n", uint64(height))
+			log.Printf("Height: %d, Submitted: %s\n", uint64(height), hexAggregated)
+
 			//for i, eachValidatorAccount := range validatorAccountList {
 			//	eachAddress, err := eachValidatorAccount.Address(AddressPrefix)
 			//	if err != nil {
