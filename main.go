@@ -10,8 +10,10 @@ import (
 	bls "github.com/drand/kyber-bls12381"
 	"github.com/ignite/cli/ignite/pkg/cosmosaccount"
 	"github.com/ignite/cli/ignite/pkg/cosmosclient"
+	"github.com/tendermint/tendermint/types/time"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 
 	tmclient "github.com/tendermint/tendermint/rpc/client/http"
@@ -70,6 +72,7 @@ func main() {
 	log.Printf("\nGot Auction Alice Address %s", auctionAliceAddress)
 
 	validatorAccountList := make([]cosmosaccount.Account, TotalValidatorNumber)
+	validatorAddressList := make([]string, TotalValidatorNumber)
 	for i, eachAccountName := range ValidatorNameList {
 		account, err := cosmos.Account(eachAccountName)
 		if err != nil {
@@ -81,7 +84,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-
+		validatorAddressList[i] = addr
 		log.Printf("%s's address: %s\n", eachAccountName, addr)
 
 		msg := &types.MsgRegisterValidator{
@@ -110,7 +113,8 @@ func main() {
 	s := bls.NewBLS12381Suite()
 	var secretVal []byte = []byte{187}
 	var qBig = distIBE.BigFromHex("0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001")
-	secret, _ := distIBE.H3(s, secretVal, []byte("This is the secret message"))
+
+	secret, _ := distIBE.H3(s, secretVal, []byte(strconv.FormatInt(time.Now().UnixNano(), 10)))
 	publicKey := s.G1().Point().Mul(secret, s.G1().Point().Base())
 
 	for {
@@ -120,6 +124,12 @@ func main() {
 			fmt.Println("")
 			log.Println("Got new block height: ", height)
 
+			// Generate a new secret every 25 blocks
+			if height%25 == 0 {
+				secret, _ = distIBE.H3(s, secretVal, []byte(strconv.FormatInt(time.Now().UnixNano(), 10)))
+				publicKey = s.G1().Point().Mul(secret, s.G1().Point().Base())
+			}
+
 			// generating secret shares
 			shares, _ := distIBE.GenerateShares(uint32(TotalValidatorNumber), uint32(Threshold), secret, qBig)
 
@@ -128,6 +138,21 @@ func main() {
 			publicKeyHex := hex.EncodeToString(publicKeyBytes)
 
 			log.Println("Public Key: ", publicKeyHex)
+			// Submit the pubkey & id to fairyring
+			//_, err := cosmos.BroadcastTx(
+			//	context.Background(),
+			//	validatorAccountList[0],
+			//	&types.MsgCreatePubKeyID{
+			//		Creator:   validatorAddressList[0],
+			//		Height:    uint64(height),
+			//		PublicKey: publicKeyHex,
+			//		IbeID:     IBEId,
+			//	},
+			//)
+			//if err != nil {
+			//	log.Fatal(err)
+			//}
+			//log.Println("Submitted PubKey & ID for block: ", strconv.FormatInt(height, 10))
 
 			// Generating commitments
 			var c []distIBE.Commitment
@@ -157,9 +182,10 @@ func main() {
 			hexAggregated := hex.EncodeToString(aggregatedBytes)
 
 			broadcastMsg := &fbTypes.MsgCreateAggregatedKeyShare{
-				Creator: auctionAliceAddress,
-				Data:    hexAggregated,
-				Height:  uint64(height),
+				Creator:   auctionAliceAddress,
+				Data:      hexAggregated,
+				Height:    uint64(height),
+				PublicKey: publicKeyHex,
 			}
 
 			_, err = auctionCosmos.BroadcastTx(
