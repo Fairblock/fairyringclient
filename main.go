@@ -1,15 +1,11 @@
 package main
 
 import (
-	distIBE "DistributedIBE"
 	"context"
-	"encoding/hex"
-	fbTypes "fairyring/x/fairblock/types"
 	"fairyring/x/fairyring/types"
+	"fairyringclient/shareAPIClient"
 	"fmt"
-	bls "github.com/drand/kyber-bls12381"
 	"github.com/ignite/cli/ignite/pkg/cosmosclient"
-	"github.com/tendermint/tendermint/types/time"
 	"log"
 	"os"
 	"strconv"
@@ -24,14 +20,58 @@ var (
 	interrupt chan os.Signal
 )
 
+const ApiUrl = "https://7d3q6i0uk2.execute-api.us-east-1.amazonaws.com"
+const ManagerPrivateKey = "keys/skManager.pem"
+const PrivateKeyFile = "keys/sk1.pem"
+const PubKeyFile1 = "keys/pk1.pem"
+const PubKeyFile2 = "keys/pk2.pem"
+const Msg = "random_msg"
+
 const ValidatorName = "alice"
-const TotalValidatorNum = 3
+const TotalValidatorNum = 2
 const Threshold = 1
 
 const AddressPrefix = "cosmos"
 const AuctionAddressPrefix = "auction"
 
+func setupShareClient(pks []string) (string, error) {
+	shareClient, err := shareAPIClient.NewShareAPIClient(ApiUrl, ManagerPrivateKey)
+	if err != nil {
+		return "", err
+	}
+
+	result, err := shareClient.Setup(TotalValidatorNum, Threshold, Msg, pks)
+	if err != nil {
+		return "", err
+	}
+
+	return result, nil
+}
+
 func main() {
+
+	pk1, err := readPemFile(PubKeyFile1)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	pk2, err := readPemFile(PubKeyFile2)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	masterPublicKey, err := setupShareClient([]string{pk1, pk2})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Printf("Setup Result: %s", masterPublicKey)
+
+	shareClient, err := shareAPIClient.NewShareAPIClient(ApiUrl, PrivateKeyFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// Create the cosmos client
 	cosmos, err := cosmosclient.New(
 		context.Background(),
@@ -99,14 +139,6 @@ func main() {
 
 	defer client.Stop()
 
-	// Setup
-	s := bls.NewBLS12381Suite()
-	var secretVal []byte = []byte{187}
-	var qBig = distIBE.BigFromHex("0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001")
-
-	secret, _ := distIBE.H3(s, secretVal, []byte(strconv.FormatInt(time.Now().UnixNano(), 10)))
-	publicKey := s.G1().Point().Mul(secret, s.G1().Point().Base())
-
 	for {
 		select {
 		case result := <-out:
@@ -114,22 +146,16 @@ func main() {
 			fmt.Println("")
 			log.Println("Got new block height: ", height)
 
-			// Generate a new secret every 25 blocks
-			if height%25 == 0 {
-				secret, _ = distIBE.H3(s, secretVal, []byte(strconv.FormatInt(time.Now().UnixNano(), 10)))
-				publicKey = s.G1().Point().Mul(secret, s.G1().Point().Base())
-			}
-
 			heightInStr := strconv.FormatInt(height, 10)
 
+			share, err := shareClient.GetShare(heightInStr)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			log.Printf("Share for height %s: %s", heightInStr, share.EncShare)
 			// generating secret shares
-			shares, _ := distIBE.GenerateShares(uint32(TotalValidatorNum), uint32(Threshold), secret, qBig)
 
-			// Public Key
-			publicKeyBytes, _ := publicKey.MarshalBinary()
-			publicKeyHex := hex.EncodeToString(publicKeyBytes)
-
-			log.Println("Public Key: ", publicKeyHex)
 			// Submit the pubkey & id to fairyring
 			//_, err := cosmos.BroadcastTx(
 			//	context.Background(),
@@ -147,50 +173,52 @@ func main() {
 			//log.Println("Submitted PubKey & ID for block: ", strconv.FormatInt(height, 10))
 
 			// Generating commitments
-			var c []distIBE.Commitment
-			for j := 0; j < TotalValidatorNum; j++ {
-				c = append(c, distIBE.Commitment{
-					Sp: s.G1().Point().Mul(
-						shares[j].Value,
-						s.G1().Point().Base(),
-					),
-					Index: uint32(j + 1),
-				})
-			}
+			//var c []distIBE.Commitment
+			//for j := 0; j < TotalValidatorNum; j++ {
+			//	c = append(c, distIBE.Commitment{
+			//		Sp: s.G1().Point().Mul(
+			//			shares[j].Value,
+			//			s.G1().Point().Base(),
+			//		),
+			//		Index: uint32(j + 1),
+			//	})
+			//}
+			//
+			//// Extracting the keys using shares
+			//var sk []distIBE.ExtractedKey
+			//for k := 0; k < TotalValidatorNum; k++ {
+			//	sk = append(sk, distIBE.Extract(s, shares[k].Value, uint32(k+1), []byte(heightInStr)))
+			//}
+			//
+			//aggregated, _ := distIBE.AggregateSK(s, sk, c, []byte(heightInStr))
+			//
+			//aggregatedBytes, err := aggregated.MarshalBinary()
+			//if err != nil {
+			//	log.Fatal(err)
+			//}
+			//
+			//hexAggregated := hex.EncodeToString(aggregatedBytes)
+			//
+			//broadcastMsg := &fbTypes.MsgCreateAggregatedKeyShare{
+			//	Creator:   auctionAliceAddress,
+			//	Data:      hexAggregated,
+			//	Height:    uint64(height),
+			//	PublicKey: publicKeyHex,
+			//}
+			//
+			//_, err = auctionCosmos.BroadcastTx(
+			//	context.Background(),
+			//	auctionAlice,
+			//	broadcastMsg,
+			//)
+			//
+			//if err != nil {
+			//	log.Fatal(err)
+			//}
+			//
+			//log.Printf("Height: %d, Submitted: %s\n", uint64(height), hexAggregated)
 
-			// Extracting the keys using shares
-			var sk []distIBE.ExtractedKey
-			for k := 0; k < TotalValidatorNum; k++ {
-				sk = append(sk, distIBE.Extract(s, shares[k].Value, uint32(k+1), []byte(heightInStr)))
-			}
-
-			aggregated, _ := distIBE.AggregateSK(s, sk, c, []byte(heightInStr))
-
-			aggregatedBytes, err := aggregated.MarshalBinary()
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			hexAggregated := hex.EncodeToString(aggregatedBytes)
-
-			broadcastMsg := &fbTypes.MsgCreateAggregatedKeyShare{
-				Creator:   auctionAliceAddress,
-				Data:      hexAggregated,
-				Height:    uint64(height),
-				PublicKey: publicKeyHex,
-			}
-
-			_, err = auctionCosmos.BroadcastTx(
-				context.Background(),
-				auctionAlice,
-				broadcastMsg,
-			)
-
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			log.Printf("Height: %d, Submitted: %s\n", uint64(height), hexAggregated)
+			// --
 
 			//for i, eachValidatorAccount := range validatorAccountList {
 			//	eachAddress, err := eachValidatorAccount.Address(AddressPrefix)
@@ -227,4 +255,27 @@ func main() {
 			// }
 		}
 	}
+}
+
+func readPemFile(filePath string) (string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
+
+	defer file.Close()
+
+	//Create a byte slice (pemBytes) the size of the file size
+	pemFileInfo, err := file.Stat()
+	if err != nil {
+		return "", err
+	}
+
+	pemBytes := make([]byte, pemFileInfo.Size())
+	file.Read(pemBytes)
+	if err != nil {
+		return "", err
+	}
+
+	return string(pemBytes), nil
 }
