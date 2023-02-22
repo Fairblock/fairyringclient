@@ -8,7 +8,6 @@ import (
 	"fairyring/x/fairyring/types"
 	"fmt"
 	bls "github.com/drand/kyber-bls12381"
-	"github.com/ignite/cli/ignite/pkg/cosmosaccount"
 	"github.com/ignite/cli/ignite/pkg/cosmosclient"
 	"github.com/tendermint/tendermint/types/time"
 	"log"
@@ -25,11 +24,9 @@ var (
 	interrupt chan os.Signal
 )
 
-var ValidatorNameList = []string{"alice"} // , "bob"}
-var TotalValidatorNumber = len(ValidatorNameList)
-
+const ValidatorName = "alice"
+const TotalValidatorNum = 3
 const Threshold = 1
-const IBEId = "Random_IBE_ID"
 
 const AddressPrefix = "cosmos"
 const AuctionAddressPrefix = "auction"
@@ -71,35 +68,28 @@ func main() {
 
 	log.Printf("\nGot Auction Alice Address %s", auctionAliceAddress)
 
-	validatorAccountList := make([]cosmosaccount.Account, TotalValidatorNumber)
-	validatorAddressList := make([]string, TotalValidatorNumber)
-	for i, eachAccountName := range ValidatorNameList {
-		account, err := cosmos.Account(eachAccountName)
-		if err != nil {
-			log.Fatal(err)
-		}
-		validatorAccountList[i] = account
-
-		addr, err := account.Address(AddressPrefix)
-		if err != nil {
-			log.Fatal(err)
-		}
-		validatorAddressList[i] = addr
-		log.Printf("%s's address: %s\n", eachAccountName, addr)
-
-		msg := &types.MsgRegisterValidator{
-			Creator: addr,
-		}
-
-		_, err = cosmos.BroadcastTx(context.Background(), account, msg)
-		if err != nil {
-			if !strings.Contains(err.Error(), "validator already registered") {
-				log.Fatal(err)
-			}
-		}
-
-		log.Printf("%s's Registered as Validator", eachAccountName)
+	account, err := cosmos.Account(ValidatorName)
+	if err != nil {
+		log.Fatal(err)
 	}
+	addr, err := account.Address(AddressPrefix)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("%s's address: %s\n", ValidatorName, addr)
+
+	msg := &types.MsgRegisterValidator{
+		Creator: addr,
+	}
+
+	_, err = cosmos.BroadcastTx(context.Background(), account, msg)
+	if err != nil {
+		if !strings.Contains(err.Error(), "validator already registered") {
+			log.Fatal(err)
+		}
+	}
+
+	log.Printf("%s's Registered as Validator", ValidatorName)
 
 	query := "tm.event = 'NewBlockHeader'"
 	out, err := client.Subscribe(context.Background(), "", query)
@@ -130,8 +120,10 @@ func main() {
 				publicKey = s.G1().Point().Mul(secret, s.G1().Point().Base())
 			}
 
+			heightInStr := strconv.FormatInt(height, 10)
+
 			// generating secret shares
-			shares, _ := distIBE.GenerateShares(uint32(TotalValidatorNumber), uint32(Threshold), secret, qBig)
+			shares, _ := distIBE.GenerateShares(uint32(TotalValidatorNum), uint32(Threshold), secret, qBig)
 
 			// Public Key
 			publicKeyBytes, _ := publicKey.MarshalBinary()
@@ -156,7 +148,7 @@ func main() {
 
 			// Generating commitments
 			var c []distIBE.Commitment
-			for j := 0; j < TotalValidatorNumber; j++ {
+			for j := 0; j < TotalValidatorNum; j++ {
 				c = append(c, distIBE.Commitment{
 					Sp: s.G1().Point().Mul(
 						shares[j].Value,
@@ -168,11 +160,11 @@ func main() {
 
 			// Extracting the keys using shares
 			var sk []distIBE.ExtractedKey
-			for k := 0; k < TotalValidatorNumber; k++ {
-				sk = append(sk, distIBE.Extract(s, shares[k].Value, uint32(k+1), []byte(IBEId)))
+			for k := 0; k < TotalValidatorNum; k++ {
+				sk = append(sk, distIBE.Extract(s, shares[k].Value, uint32(k+1), []byte(heightInStr)))
 			}
 
-			aggregated, _ := distIBE.AggregateSK(s, sk, c, []byte(IBEId))
+			aggregated, _ := distIBE.AggregateSK(s, sk, c, []byte(heightInStr))
 
 			aggregatedBytes, err := aggregated.MarshalBinary()
 			if err != nil {
