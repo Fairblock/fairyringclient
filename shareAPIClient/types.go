@@ -3,11 +3,22 @@ package shareAPIClient
 type QueryStringParameters interface{}
 type MultiValueQueryStringParameters interface{}
 
-type Req struct {
-	Path                            string                          `json:"path"`
-	HttpMethod                      string                          `json:"httpMethod"`
-	QueryStringParameters           QueryStringParameters           `json:"queryStringParameters,omitempty"`
-	MultiValueQueryStringParameters MultiValueQueryStringParameters `json:"multiValueQueryStringParameters,omitempty"`
+type GetMasterPublicKeyReq struct {
+	Path       string `json:"path"`
+	HttpMethod string `json:"httpMethod"`
+}
+
+type GetShareReq struct {
+	Path                  string        `json:"path"`
+	HttpMethod            string        `json:"httpMethod"`
+	QueryStringParameters GetShareParam `json:"queryStringParameters,omitempty"`
+}
+
+type SetupReq struct {
+	Path                            string             `json:"path"`
+	HttpMethod                      string             `json:"httpMethod"`
+	QueryStringParameters           SetupParam         `json:"queryStringParameters,omitempty"`
+	MultiValueQueryStringParameters SetupMultiValParam `json:"multiValueQueryStringParameters,omitempty"`
 }
 
 type GetShareParam struct {

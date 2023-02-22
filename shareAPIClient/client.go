@@ -61,18 +61,23 @@ func (s ShareAPIClient) signMessage(message []byte) (string, error) {
 
 func (s ShareAPIClient) doRequest(path, method, body string) ([]byte, error) {
 	req, err := http.NewRequest(method, s.URL+path, strings.NewReader(body))
+	req.Header.Add("Content-Type", "application/json")
 	if err != nil {
 		return nil, err
 	}
+
 	res, err := s.Client.Do(req)
 	if err != nil {
 		return nil, err
 	}
+
 	defer res.Body.Close()
+
 	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
 	}
+	
 	return resBody, nil
 }
 
@@ -82,14 +87,14 @@ func (s ShareAPIClient) GetShare(msg string) (*GetShareRespBody, error) {
 		return nil, err
 	}
 
-	body := Req{
+	body := GetShareReq{
 		Path:       "/share-req",
 		HttpMethod: "GET",
-		QueryStringParameters: QueryStringParameters(GetShareParam{
+		QueryStringParameters: GetShareParam{
 			PublicKey: s.pubKey,
 			Msg:       msg,
 			SignedMsg: signed,
-		}),
+		},
 	}
 
 	jsonStr, err := json.Marshal(body)
@@ -103,7 +108,7 @@ func (s ShareAPIClient) GetShare(msg string) (*GetShareRespBody, error) {
 	}
 
 	var parsedResp GetShareResp
-	err = json.Unmarshal(res, parsedResp)
+	err = json.Unmarshal(res, &parsedResp)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +117,7 @@ func (s ShareAPIClient) GetShare(msg string) (*GetShareRespBody, error) {
 }
 
 func (s ShareAPIClient) GetMasterPublicKey() (string, error) {
-	body := Req{
+	body := GetMasterPublicKeyReq{
 		Path:       "/mpk-req",
 		HttpMethod: "GET",
 	}
@@ -128,7 +133,7 @@ func (s ShareAPIClient) GetMasterPublicKey() (string, error) {
 	}
 
 	var parsedResp Response
-	err = json.Unmarshal(res, parsedResp)
+	err = json.Unmarshal(res, &parsedResp)
 	if err != nil {
 		return "", err
 	}
@@ -142,18 +147,18 @@ func (s ShareAPIClient) Setup(n, t uint64, msg string, pkList []string) (string,
 		return "", err
 	}
 
-	body := Req{
+	body := SetupReq{
 		Path:       "/setup",
 		HttpMethod: "POST",
-		QueryStringParameters: QueryStringParameters(SetupParam{
+		QueryStringParameters: SetupParam{
 			N:         strconv.FormatUint(n, 10),
 			T:         strconv.FormatUint(t, 10),
 			Msg:       msg,
 			SignedMsg: signed,
-		}),
-		MultiValueQueryStringParameters: MultiValueQueryStringParameters(SetupMultiValParam{
+		},
+		MultiValueQueryStringParameters: SetupMultiValParam{
 			PkList: pkList,
-		}),
+		},
 	}
 
 	jsonStr, err := json.Marshal(body)
@@ -167,7 +172,7 @@ func (s ShareAPIClient) Setup(n, t uint64, msg string, pkList []string) (string,
 	}
 
 	var parsedResp Response
-	err = json.Unmarshal(res, parsedResp)
+	err = json.Unmarshal(res, &parsedResp)
 	if err != nil {
 		return "", err
 	}
