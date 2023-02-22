@@ -76,7 +76,7 @@ func (s ShareAPIClient) doRequest(path, method, body string) ([]byte, error) {
 	return resBody, nil
 }
 
-func (s ShareAPIClient) getShare(msg string) (*GetShareRespBody, error) {
+func (s ShareAPIClient) GetShare(msg string) (*GetShareRespBody, error) {
 	signed, err := s.signMessage([]byte(msg))
 	if err != nil {
 		return nil, err
@@ -111,7 +111,7 @@ func (s ShareAPIClient) getShare(msg string) (*GetShareRespBody, error) {
 	return &parsedResp.Body, nil
 }
 
-func (s ShareAPIClient) getMasterPublicKey() (string, error) {
+func (s ShareAPIClient) GetMasterPublicKey() (string, error) {
 	body := Req{
 		Path:       "/mpk-req",
 		HttpMethod: "GET",
@@ -136,7 +136,7 @@ func (s ShareAPIClient) getMasterPublicKey() (string, error) {
 	return parsedResp.Body, nil
 }
 
-func (s ShareAPIClient) setup(n, t uint64, msg string, pkList []string) (string, error) {
+func (s ShareAPIClient) Setup(n, t uint64, msg string, pkList []string) (string, error) {
 	signed, err := s.signMessage([]byte(msg))
 	if err != nil {
 		return "", err
