@@ -44,10 +44,6 @@ type GetShareRespBody struct {
 	Index    string `json:"index"`
 }
 
-type GetShareResp struct {
-	Body GetShareRespBody `json:"body"`
-}
-
 type Response struct {
 	Body string `json:"body"`
 }

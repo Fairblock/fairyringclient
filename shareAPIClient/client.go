@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
+	"errors"
 	"github.com/tendermint/tendermint/libs/json"
 	"io"
 	"log"
@@ -77,7 +78,6 @@ func (s ShareAPIClient) doRequest(path, method, body string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	
 	return resBody, nil
 }
 
@@ -107,13 +107,16 @@ func (s ShareAPIClient) GetShare(msg string) (*GetShareRespBody, error) {
 		return nil, err
 	}
 
-	var parsedResp GetShareResp
+	var parsedResp Response
 	err = json.Unmarshal(res, &parsedResp)
 	if err != nil {
 		return nil, err
 	}
 
-	return &parsedResp.Body, nil
+	var parsedGetShareResp GetShareRespBody
+	err = json.Unmarshal([]byte(parsedResp.Body), &parsedGetShareResp)
+
+	return &parsedGetShareResp, nil
 }
 
 func (s ShareAPIClient) GetMasterPublicKey() (string, error) {
@@ -136,6 +139,10 @@ func (s ShareAPIClient) GetMasterPublicKey() (string, error) {
 	err = json.Unmarshal(res, &parsedResp)
 	if err != nil {
 		return "", err
+	}
+
+	if parsedResp.Body == "" {
+		return "", errors.New("error getting master public key")
 	}
 
 	return parsedResp.Body, nil
@@ -175,6 +182,10 @@ func (s ShareAPIClient) Setup(n, t uint64, msg string, pkList []string) (string,
 	err = json.Unmarshal(res, &parsedResp)
 	if err != nil {
 		return "", err
+	}
+
+	if parsedResp.Body == "" {
+		return "", errors.New("error setting up")
 	}
 
 	return parsedResp.Body, nil
