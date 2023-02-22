@@ -1,23 +1,62 @@
 package shareAPIClient
 
 import (
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
 	"github.com/tendermint/tendermint/libs/json"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 )
 
 type ShareAPIClient struct {
-	URL    string
-	Client http.Client
+	URL        string
+	Client     http.Client
+	pubKey     string
+	privateKey rsa.PrivateKey
 }
 
-func NewShareAPIClient(url string) ShareAPIClient {
-	return ShareAPIClient{
-		URL:    url,
-		Client: http.Client{},
+func NewShareAPIClient(url, privateKeyPath string) (*ShareAPIClient, error) {
+	pKey, err := pemToPrivateKey(privateKeyPath)
+	if err != nil {
+		return nil, err
 	}
+
+	pubKeyStr, err := bytesToPemStr(x509.MarshalPKCS1PublicKey(&pKey.PublicKey), publicKeyType)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ShareAPIClient{
+		URL:        url,
+		Client:     http.Client{},
+		pubKey:     pubKeyStr,
+		privateKey: *pKey,
+	}, nil
+}
+
+func (s ShareAPIClient) signMessage(message []byte) (string, error) {
+	msgHash := sha256.New()
+	_, err := msgHash.Write(message)
+	if err != nil {
+		return "", err
+	}
+	msgHashSum := msgHash.Sum(nil)
+
+	sig, err := rsa.SignPSS(rand.Reader, &s.privateKey, crypto.SHA256, msgHashSum, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// return base64.StdEncoding.EncodeToString(sig), nil
+	signature, err := bytesToPemStr(sig, signatureType)
+
+	return signature, nil
 }
 
 func (s ShareAPIClient) doRequest(path, method, body string) ([]byte, error) {
@@ -37,14 +76,19 @@ func (s ShareAPIClient) doRequest(path, method, body string) ([]byte, error) {
 	return resBody, nil
 }
 
-func (s ShareAPIClient) GetShare(pubKey, msg, signedMsg string) (*GetShareRespBody, error) {
+func (s ShareAPIClient) getShare(msg string) (*GetShareRespBody, error) {
+	signed, err := s.signMessage([]byte(msg))
+	if err != nil {
+		return nil, err
+	}
+
 	body := Req{
 		Path:       "/share-req",
 		HttpMethod: "GET",
 		QueryStringParameters: QueryStringParameters(GetShareParam{
-			PublicKey: pubKey,
+			PublicKey: s.pubKey,
 			Msg:       msg,
-			SignedMsg: signedMsg,
+			SignedMsg: signed,
 		}),
 	}
 
@@ -67,7 +111,7 @@ func (s ShareAPIClient) GetShare(pubKey, msg, signedMsg string) (*GetShareRespBo
 	return &parsedResp.Body, nil
 }
 
-func (s ShareAPIClient) GetMasterPublicKey() (string, error) {
+func (s ShareAPIClient) getMasterPublicKey() (string, error) {
 	body := Req{
 		Path:       "/mpk-req",
 		HttpMethod: "GET",
@@ -92,7 +136,12 @@ func (s ShareAPIClient) GetMasterPublicKey() (string, error) {
 	return parsedResp.Body, nil
 }
 
-func (s ShareAPIClient) Setup(n, t uint64, msg, signedMsg string, pkList []string) (string, error) {
+func (s ShareAPIClient) setup(n, t uint64, msg string, pkList []string) (string, error) {
+	signed, err := s.signMessage([]byte(msg))
+	if err != nil {
+		return "", err
+	}
+
 	body := Req{
 		Path:       "/setup",
 		HttpMethod: "POST",
@@ -100,7 +149,7 @@ func (s ShareAPIClient) Setup(n, t uint64, msg, signedMsg string, pkList []strin
 			N:         strconv.FormatUint(n, 10),
 			T:         strconv.FormatUint(t, 10),
 			Msg:       msg,
-			SignedMsg: signedMsg,
+			SignedMsg: signed,
 		}),
 		MultiValueQueryStringParameters: MultiValueQueryStringParameters(SetupMultiValParam{
 			PkList: pkList,
