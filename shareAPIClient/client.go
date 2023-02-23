@@ -1,6 +1,7 @@
 package shareAPIClient
 
 import (
+	distIBE "DistributedIBE"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
@@ -8,7 +9,6 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"errors"
-	"github.com/drand/kyber"
 	bls "github.com/drand/kyber-bls12381"
 	"github.com/tendermint/tendermint/libs/json"
 	"io"
@@ -99,7 +99,7 @@ func (s ShareAPIClient) doRequest(path, method, body string) ([]byte, error) {
 	return resBody, nil
 }
 
-func (s ShareAPIClient) GetShare(msg string) (*kyber.Scalar, uint64, error) {
+func (s ShareAPIClient) GetShare(msg string) (*distIBE.Share, uint64, error) {
 	signed, err := s.signMessage([]byte(msg))
 	if err != nil {
 		return nil, 0, err
@@ -150,7 +150,10 @@ func (s ShareAPIClient) GetShare(msg string) (*kyber.Scalar, uint64, error) {
 		return nil, 0, err
 	}
 
-	return &parsedShare, indexInt, nil
+	return &distIBE.Share{
+		Index: bls.NewKyberScalar().SetInt64(int64(indexInt)),
+		Value: parsedShare,
+	}, indexInt, nil
 }
 
 func (s ShareAPIClient) GetMasterPublicKey() (string, error) {

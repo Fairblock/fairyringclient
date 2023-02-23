@@ -1,10 +1,14 @@
 package main
 
 import (
+	distIBE "DistributedIBE"
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"fairyring/x/fairyring/types"
 	"fairyringclient/shareAPIClient"
 	"fmt"
+	bls "github.com/drand/kyber-bls12381"
 	"github.com/ignite/cli/ignite/pkg/cosmosclient"
 	"log"
 	"os"
@@ -44,8 +48,9 @@ func setupShareClient(pks []string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	replacedResult := strings.ReplaceAll(result, `"`, "")
 
-	return result, nil
+	return replacedResult, nil
 }
 
 func main() {
@@ -106,7 +111,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Printf("\nGot Auction Alice Address %s", auctionAliceAddress)
+	log.Println("Got Auction Alice Address %s", auctionAliceAddress)
 
 	account, err := cosmos.Account(ValidatorName)
 	if err != nil {
@@ -139,6 +144,16 @@ func main() {
 
 	defer client.Stop()
 
+	s := bls.NewBLS12381Suite()
+
+	decodedPublicKey, err := base64.StdEncoding.DecodeString(masterPublicKey)
+	if err != nil {
+		log.Fatal(err)
+	}
+	publicKeyInHex := hex.EncodeToString(decodedPublicKey)
+
+	log.Printf("Public key in Hex: %s", publicKeyInHex)
+
 	for {
 		select {
 		case result := <-out:
@@ -146,113 +161,62 @@ func main() {
 			fmt.Println("")
 			log.Println("Got new block height: ", height)
 
-			heightInStr := strconv.FormatInt(height, 10)
+			processHeight := uint64(height + 1)
+			processHeightStr := strconv.FormatUint(processHeight, 10)
 
-			share, err := shareClient.GetShare(heightInStr)
+			// Submit the pubkey & id to fairyring
+			go func() {
+				_, err := cosmos.BroadcastTx(
+					context.Background(),
+					account,
+					&types.MsgCreatePubKeyID{
+						Creator:   addr,
+						Height:    processHeight,
+						PublicKey: publicKeyInHex,
+						IbeID:     processHeightStr,
+					},
+				)
+				if err != nil {
+					log.Fatal(err)
+				}
+				log.Println("Submitted PubKey & ID for block: ", processHeightStr)
+			}()
+
+			share, index, err := shareClient.GetShare(processHeightStr)
 			if err != nil {
 				log.Fatal(err)
 			}
 
-			log.Printf("Share for height %s: %s", heightInStr, share.EncShare)
-			// generating secret shares
+			extractedKey := distIBE.Extract(s, share.Value, uint32(index), []byte(processHeightStr))
+			extractedKeyBinary, err := extractedKey.Sk.MarshalBinary()
+			if err != nil {
+				log.Fatal(err)
+			}
+			extractedKeyHex := hex.EncodeToString(extractedKeyBinary)
 
-			// Submit the pubkey & id to fairyring
-			//_, err := cosmos.BroadcastTx(
-			//	context.Background(),
-			//	validatorAccountList[0],
-			//	&types.MsgCreatePubKeyID{
-			//		Creator:   validatorAddressList[0],
-			//		Height:    uint64(height),
-			//		PublicKey: publicKeyHex,
-			//		IbeID:     IBEId,
-			//	},
-			//)
-			//if err != nil {
-			//	log.Fatal(err)
-			//}
-			//log.Println("Submitted PubKey & ID for block: ", strconv.FormatInt(height, 10))
+			log.Printf("Share for height %s: %s", processHeightStr, extractedKeyHex)
 
-			// Generating commitments
-			//var c []distIBE.Commitment
-			//for j := 0; j < TotalValidatorNum; j++ {
-			//	c = append(c, distIBE.Commitment{
-			//		Sp: s.G1().Point().Mul(
-			//			shares[j].Value,
-			//			s.G1().Point().Base(),
-			//		),
-			//		Index: uint32(j + 1),
-			//	})
-			//}
-			//
-			//// Extracting the keys using shares
-			//var sk []distIBE.ExtractedKey
-			//for k := 0; k < TotalValidatorNum; k++ {
-			//	sk = append(sk, distIBE.Extract(s, shares[k].Value, uint32(k+1), []byte(heightInStr)))
-			//}
-			//
-			//aggregated, _ := distIBE.AggregateSK(s, sk, c, []byte(heightInStr))
-			//
-			//aggregatedBytes, err := aggregated.MarshalBinary()
-			//if err != nil {
-			//	log.Fatal(err)
-			//}
-			//
-			//hexAggregated := hex.EncodeToString(aggregatedBytes)
-			//
-			//broadcastMsg := &fbTypes.MsgCreateAggregatedKeyShare{
-			//	Creator:   auctionAliceAddress,
-			//	Data:      hexAggregated,
-			//	Height:    uint64(height),
-			//	PublicKey: publicKeyHex,
-			//}
-			//
-			//_, err = auctionCosmos.BroadcastTx(
-			//	context.Background(),
-			//	auctionAlice,
-			//	broadcastMsg,
-			//)
-			//
-			//if err != nil {
-			//	log.Fatal(err)
-			//}
-			//
-			//log.Printf("Height: %d, Submitted: %s\n", uint64(height), hexAggregated)
+			commitmentPoint := s.G1().Point().Mul(share.Value, s.G1().Point().Base())
+			commitmentBinary, err := commitmentPoint.MarshalBinary()
 
-			// --
+			if err != nil {
+				log.Fatal(err)
+			}
 
-			//for i, eachValidatorAccount := range validatorAccountList {
-			//	eachAddress, err := eachValidatorAccount.Address(AddressPrefix)
-			//	if err != nil {
-			//		log.Fatal(err)
-			//	}
-			//
-			//	out, err := sk[i].Sk.MarshalBinary()
-			//	if err != nil {
-			//		log.Fatal(err)
-			//	}
-			//
-			//	cOut, err := c[i].Sp.MarshalBinary()
-			//	if err != nil {
-			//		log.Fatal(err)
-			//	}
-			//
-			//	hexKey := hex.EncodeToString(out)
-			//	hexCommitment := hex.EncodeToString(cOut)
+			broadcastMsg := &types.MsgSendKeyshare{
+				Creator:       addr,
+				Message:       extractedKeyHex,
+				Commitment:    hex.EncodeToString(commitmentBinary),
+				KeyShareIndex: index,
+				BlockHeight:   processHeight,
+			}
+			// log.Printf("Broadcasting")
+			_, err = cosmos.BroadcastTx(context.Background(), account, broadcastMsg)
+			if err != nil {
+				log.Fatal(err)
+			}
 
-			//broadcastMsg := &types.MsgSendKeyshare{
-			//	Creator:       eachAddress,
-			//	Message:       hexKey,
-			//	Commitment:    hexCommitment,
-			//	KeyShareIndex: uint64(sk[i].Index),
-			//	BlockHeight:   uint64(height) + 1,
-			//}
-			//// log.Printf("Broadcasting")
-			//_, err = cosmos.BroadcastTx(context.Background(), eachValidatorAccount, broadcastMsg)
-			//if err != nil {
-			//	log.Fatal(err)
-			//}
-			//log.Printf("\nSent KeyShare at Block Height: %d\nKey: %s\nCommitment: %s\nKey Index: %d Commitment Index: %d\n", height, hexKey, hexCommitment, sk[i].Index, c[i].Index)
-			// }
+			log.Printf("Sent KeyShare at Block Height: %d\n", processHeight)
 		}
 	}
 }
