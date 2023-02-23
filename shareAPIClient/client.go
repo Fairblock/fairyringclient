@@ -6,7 +6,10 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/base64"
 	"errors"
+	"github.com/drand/kyber"
+	bls "github.com/drand/kyber-bls12381"
 	"github.com/tendermint/tendermint/libs/json"
 	"io"
 	"log"
@@ -60,6 +63,21 @@ func (s ShareAPIClient) signMessage(message []byte) (string, error) {
 	return signature, nil
 }
 
+func (s ShareAPIClient) decryptShare(shareCipher string) ([]byte, error) {
+	decoded, err := base64.StdEncoding.DecodeString(shareCipher)
+	if err != nil {
+		return nil, err
+	}
+
+	label := []byte("OAEP Encrypted")
+	plainByte, err := rsa.DecryptOAEP(sha256.New(), rand.Reader, &s.privateKey, decoded, label)
+	if err != nil {
+		return nil, err
+	}
+
+	return plainByte, nil
+}
+
 func (s ShareAPIClient) doRequest(path, method, body string) ([]byte, error) {
 	req, err := http.NewRequest(method, s.URL+path, strings.NewReader(body))
 	req.Header.Add("Content-Type", "application/json")
@@ -81,10 +99,10 @@ func (s ShareAPIClient) doRequest(path, method, body string) ([]byte, error) {
 	return resBody, nil
 }
 
-func (s ShareAPIClient) GetShare(msg string) (*GetShareRespBody, error) {
+func (s ShareAPIClient) GetShare(msg string) (*kyber.Scalar, uint64, error) {
 	signed, err := s.signMessage([]byte(msg))
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	body := GetShareReq{
@@ -99,24 +117,40 @@ func (s ShareAPIClient) GetShare(msg string) (*GetShareRespBody, error) {
 
 	jsonStr, err := json.Marshal(body)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	res, err := s.doRequest("/share-req", "GET", string(jsonStr))
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	var parsedResp Response
 	err = json.Unmarshal(res, &parsedResp)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	var parsedGetShareResp GetShareRespBody
 	err = json.Unmarshal([]byte(parsedResp.Body), &parsedGetShareResp)
 
-	return &parsedGetShareResp, nil
+	decryptedShare, err := s.decryptShare(parsedGetShareResp.EncShare)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	parsedShare := bls.NewKyberScalar()
+	err = parsedShare.UnmarshalBinary(decryptedShare)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	indexInt, err := strconv.ParseUint(strings.TrimLeft(parsedGetShareResp.Index, "0"), 10, 64)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return &parsedShare, indexInt, nil
 }
 
 func (s ShareAPIClient) GetMasterPublicKey() (string, error) {
