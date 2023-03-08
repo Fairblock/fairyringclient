@@ -24,19 +24,20 @@ var (
 	interrupt chan os.Signal
 )
 
+const NodeIP = "http://172.17.0.2"
+const NodePort = "26657"
 const ApiUrl = "https://7d3q6i0uk2.execute-api.us-east-1.amazonaws.com"
 const ManagerPrivateKey = "keys/skManager.pem"
 const PrivateKeyFile = "keys/sk1.pem"
-const PubKeyFile1 = "keys/pk1.pem"
-const PubKeyFile2 = "keys/pk2.pem"
-const Msg = "random_msg"
+const PubKeyFileNamePrefix = "keys/pk"
+const PubKeyFileNameFormat = ".pem"
 
-const ValidatorName = "alice"
-const TotalValidatorNum = 2
-const Threshold = 1
+const ValidatorName = "validator_account"
+const TotalValidatorNum = 3
+const Threshold = 2
+const isManager = true
 
 const AddressPrefix = "cosmos"
-const AuctionAddressPrefix = "auction"
 
 func setupShareClient(pks []string) (string, error) {
 	shareClient, err := shareAPIClient.NewShareAPIClient(ApiUrl, ManagerPrivateKey)
@@ -44,7 +45,7 @@ func setupShareClient(pks []string) (string, error) {
 		return "", err
 	}
 
-	result, err := shareClient.Setup(TotalValidatorNum, Threshold, Msg, pks)
+	result, err := shareClient.Setup(TotalValidatorNum, Threshold, pks)
 	if err != nil {
 		return "", err
 	}
@@ -54,64 +55,56 @@ func setupShareClient(pks []string) (string, error) {
 }
 
 func main() {
-
-	pk1, err := readPemFile(PubKeyFile1)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	pk2, err := readPemFile(PubKeyFile2)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	masterPublicKey, err := setupShareClient([]string{pk1, pk2})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.Printf("Setup Result: %s", masterPublicKey)
+	var masterPublicKey string
 
 	shareClient, err := shareAPIClient.NewShareAPIClient(ApiUrl, PrivateKeyFile)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	if isManager {
+		pks := make([]string, TotalValidatorNum)
+
+		for i := 0; i < TotalValidatorNum; i++ {
+			pk, err := readPemFile(fmt.Sprintf("%s%d%s", PubKeyFileNamePrefix, i+1, PubKeyFileNameFormat))
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			pks[i] = pk
+		}
+
+		_masterPublicKey, err := setupShareClient(pks)
+		if err != nil {
+			log.Fatal(err)
+		}
+		masterPublicKey = _masterPublicKey
+		log.Printf("Setup Result: %s", masterPublicKey)
+	} else {
+		_masterPublicKey, err := shareClient.GetMasterPublicKey()
+
+		if err != nil {
+			log.Fatal(err)
+		}
+		masterPublicKey = _masterPublicKey
+		log.Printf("Got Master Public Key: %s", masterPublicKey)
+	}
+
 	// Create the cosmos client
 	cosmos, err := cosmosclient.New(
 		context.Background(),
 		cosmosclient.WithAddressPrefix(AddressPrefix),
+		cosmosclient.WithNodeAddress(fmt.Sprintf("%s:%s", NodeIP, NodePort)),
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	auctionCosmos, err := cosmosclient.New(
-		context.Background(),
-		cosmosclient.WithAddressPrefix(AuctionAddressPrefix),
-		cosmosclient.WithHome("~/.destination_auction/"),
-		cosmosclient.WithNodeAddress("tcp://localhost:26659"),
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	client, err := tmclient.New("http://localhost:26657", "/websocket")
+	client, err := tmclient.New(fmt.Sprintf("%s:%s", NodeIP, NodePort), "/websocket")
 	err = client.Start()
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	auctionAlice, err := auctionCosmos.Account("bob")
-	if err != nil {
-		log.Fatal(err)
-	}
-	auctionAliceAddress, err := auctionAlice.Address(AuctionAddressPrefix)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.Println("Got Auction Alice Address %s", auctionAliceAddress)
 
 	account, err := cosmos.Account(ValidatorName)
 	if err != nil {

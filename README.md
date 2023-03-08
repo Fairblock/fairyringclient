@@ -2,6 +2,28 @@
 
 `fairyringclient` is a sample script for interacting with [`fairyring`](https://github.com/FairBlock/fairyring).
 
+## Generating keys for getting shares
+
+1. Create keys directory
+
+```bash
+mkdir keys
+```
+
+2.Generate key using `ssh-keygen`
+
+```bash
+ssh-keygen -t rsa -b 2048 -m PEM -f ./keys/sk1.pem
+```
+
+3. Generate public key from the private key
+
+```bash
+ssh-keygen -f ./keys/sk1.pem -e -m pem > ./keys/pk1.pem
+```
+
+4. Gather all the public key and put them inside `keys/` and rename it as `pk{number}.pem` start the number from 1.
+
 ## Running client
 
 First start the chain by navigating to `fairyring` directory.

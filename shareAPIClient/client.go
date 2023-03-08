@@ -11,6 +11,7 @@ import (
 	"errors"
 	bls "github.com/drand/kyber-bls12381"
 	"github.com/tendermint/tendermint/libs/json"
+	"github.com/tendermint/tendermint/types/time"
 	"io"
 	"log"
 	"net/http"
@@ -185,7 +186,8 @@ func (s ShareAPIClient) GetMasterPublicKey() (string, error) {
 	return parsedResp.Body, nil
 }
 
-func (s ShareAPIClient) Setup(n, t uint64, msg string, pkList []string) (string, error) {
+func (s ShareAPIClient) Setup(n, t uint64, pkList []string) (string, error) {
+	msg := strconv.FormatInt(time.Now().Unix(), 10)
 	signed, err := s.signMessage([]byte(msg))
 	if err != nil {
 		return "", err
