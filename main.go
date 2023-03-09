@@ -158,22 +158,24 @@ func main() {
 			processHeightStr := strconv.FormatUint(processHeight, 10)
 
 			// Submit the pubkey & id to fairyring
-			go func() {
-				_, err := cosmos.BroadcastTx(
-					context.Background(),
-					account,
-					&types.MsgCreatePubKeyID{
-						Creator:   addr,
-						Height:    processHeight,
-						PublicKey: publicKeyInHex,
-						IbeID:     processHeightStr,
-					},
-				)
-				if err != nil {
-					log.Fatal(err)
-				}
-				log.Println("Submitted PubKey & ID for block: ", processHeightStr)
-			}()
+			if isManager {
+				go func() {
+					_, err := cosmos.BroadcastTx(
+						context.Background(),
+						account,
+						&types.MsgCreatePubKeyID{
+							Creator:   addr,
+							Height:    processHeight,
+							PublicKey: publicKeyInHex,
+							IbeID:     processHeightStr,
+						},
+					)
+					if err != nil {
+						log.Fatal(err)
+					}
+					log.Println("Manager Submitted PubKey & ID for block: ", processHeightStr)
+				}()
+			}
 
 			share, index, err := shareClient.GetShare(processHeightStr)
 			if err != nil {
