@@ -183,14 +183,20 @@ func (s ShareAPIClient) GetMasterPublicKey() (string, error) {
 		return "", errors.New("error getting master public key")
 	}
 
-	return parsedResp.Body, nil
+	var pubVals PublicVals
+	err = json.Unmarshal([]byte(parsedResp.Body), &pubVals)
+	if err != nil {
+		return "", err
+	}
+
+	return pubVals.MPK, nil
 }
 
-func (s ShareAPIClient) Setup(n, t uint64, pkList []string) (string, error) {
+func (s ShareAPIClient) Setup(n, t uint64, pkList []string) (*PublicVals, error) {
 	msg := strconv.FormatInt(time.Now().Unix(), 10)
 	signed, err := s.signMessage([]byte(msg))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	body := SetupReq{
@@ -209,23 +215,29 @@ func (s ShareAPIClient) Setup(n, t uint64, pkList []string) (string, error) {
 
 	jsonStr, err := json.Marshal(body)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	res, err := s.doRequest("/setup", "POST", string(jsonStr))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	var parsedResp Response
 	err = json.Unmarshal(res, &parsedResp)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	if parsedResp.Body == "" {
-		return "", errors.New("error setting up")
+		return nil, errors.New("error setting up")
 	}
 
-	return parsedResp.Body, nil
+	var pubVals PublicVals
+	err = json.Unmarshal([]byte(parsedResp.Body), &pubVals)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pubVals, nil
 }

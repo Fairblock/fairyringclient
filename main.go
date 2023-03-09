@@ -50,9 +50,8 @@ func setupShareClient(pks []string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	replacedResult := strings.ReplaceAll(result, `"`, "")
 
-	return replacedResult, nil
+	return result.MPK, nil
 }
 
 func main() {

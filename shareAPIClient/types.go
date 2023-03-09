@@ -44,6 +44,11 @@ type GetShareRespBody struct {
 	Index    string `json:"index"`
 }
 
+type PublicVals struct {
+	Commits []string `json:"Commits"`
+	MPK     string   `json:"MPK"`
+}
+
 type Response struct {
 	Body string `json:"body"`
 }
