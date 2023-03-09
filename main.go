@@ -24,6 +24,7 @@ var (
 	interrupt chan os.Signal
 )
 
+const NodeDirPath = "/home/ubuntu/.fairyring/"
 const NodeIP = "http://172.17.0.2"
 const NodePort = "26657"
 const ApiUrl = "https://7d3q6i0uk2.execute-api.us-east-1.amazonaws.com"
@@ -95,6 +96,7 @@ func main() {
 		context.Background(),
 		cosmosclient.WithAddressPrefix(AddressPrefix),
 		cosmosclient.WithNodeAddress(fmt.Sprintf("%s:%s", NodeIP, NodePort)),
+		cosmosclient.WithHome(NodeDirPath),
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -119,7 +121,6 @@ func main() {
 	msg := &types.MsgRegisterValidator{
 		Creator: addr,
 	}
-
 	_, err = cosmos.BroadcastTx(context.Background(), account, msg)
 	if err != nil {
 		if !strings.Contains(err.Error(), "validator already registered") {
