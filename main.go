@@ -167,7 +167,6 @@ func main() {
 							Creator:   addr,
 							Height:    processHeight,
 							PublicKey: publicKeyInHex,
-							IbeID:     processHeightStr,
 						},
 					)
 					if err != nil {
