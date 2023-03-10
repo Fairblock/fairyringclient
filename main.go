@@ -14,6 +14,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	tmclient "github.com/tendermint/tendermint/rpc/client/http"
 	tmtypes "github.com/tendermint/tendermint/types"
@@ -52,6 +53,16 @@ func setupShareClient(pks []string) (string, error) {
 	}
 
 	return result.MPK, nil
+}
+
+var logger = log.New(os.Stdout, "", 0)
+
+func newLog(msg string) {
+	logger.SetPrefix(
+		time.Now().UTC().Format("2006/01/02 15:04:05") + " | " +
+			strconv.FormatInt(time.Now().UnixMilli(), 10) + ": ",
+	)
+	logger.Print(msg)
 }
 
 func main() {
@@ -147,34 +158,32 @@ func main() {
 
 	log.Printf("Public key in Hex: %s", publicKeyInHex)
 
+	// Submit the pubkey & id to fairyring
+	if isManager {
+		_, err := cosmos.BroadcastTx(
+			context.Background(),
+			account,
+			&types.MsgCreateLatestPubKey{
+				Creator:   addr,
+				PublicKey: publicKeyInHex,
+			},
+		)
+		if err != nil {
+			log.Fatal(err)
+		}
+		newLog("Manager Submitted latest public key")
+	}
+
 	for {
 		select {
 		case result := <-out:
 			height := result.Data.(tmtypes.EventDataNewBlockHeader).Header.Height
 			fmt.Println("")
-			log.Println("Got new block height: ", height)
 
 			processHeight := uint64(height + 1)
 			processHeightStr := strconv.FormatUint(processHeight, 10)
 
-			// Submit the pubkey & id to fairyring
-			if isManager {
-				go func() {
-					_, err := cosmos.BroadcastTx(
-						context.Background(),
-						account,
-						&types.MsgCreatePubKeyID{
-							Creator:   addr,
-							Height:    processHeight,
-							PublicKey: publicKeyInHex,
-						},
-					)
-					if err != nil {
-						log.Fatal(err)
-					}
-					log.Println("Manager Submitted PubKey & ID for block: ", processHeightStr)
-				}()
-			}
+			newLog("Got new block height: " + processHeightStr)
 
 			share, index, err := shareClient.GetShare(processHeightStr)
 			if err != nil {
@@ -188,7 +197,7 @@ func main() {
 			}
 			extractedKeyHex := hex.EncodeToString(extractedKeyBinary)
 
-			log.Printf("Share for height %s: %s", processHeightStr, extractedKeyHex)
+			newLog("Share for height " + processHeightStr + ": " + extractedKeyHex)
 
 			commitmentPoint := s.G1().Point().Mul(share.Value, s.G1().Point().Base())
 			commitmentBinary, err := commitmentPoint.MarshalBinary()
@@ -197,20 +206,23 @@ func main() {
 				log.Fatal(err)
 			}
 
-			broadcastMsg := &types.MsgSendKeyshare{
-				Creator:       addr,
-				Message:       extractedKeyHex,
-				Commitment:    hex.EncodeToString(commitmentBinary),
-				KeyShareIndex: index,
-				BlockHeight:   processHeight,
-			}
-			// log.Printf("Broadcasting")
-			_, err = cosmos.BroadcastTx(context.Background(), account, broadcastMsg)
-			if err != nil {
-				log.Fatal(err)
-			}
+			go func() {
+				broadcastMsg := &types.MsgSendKeyshare{
+					Creator:       addr,
+					Message:       extractedKeyHex,
+					Commitment:    hex.EncodeToString(commitmentBinary),
+					KeyShareIndex: index,
+					BlockHeight:   processHeight,
+				}
+				newLog("Broadcasting Keyshare for height: " + processHeightStr)
 
-			log.Printf("Sent KeyShare at Block Height: %d\n", processHeight)
+				_, err = cosmos.BroadcastTx(context.Background(), account, broadcastMsg)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				newLog("Sent KeyShare at Block Height: " + processHeightStr + "\n")
+			}()
 		}
 	}
 }
