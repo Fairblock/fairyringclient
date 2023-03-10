@@ -11,6 +11,7 @@ import (
 	bls "github.com/drand/kyber-bls12381"
 	"github.com/ignite/cli/ignite/pkg/cosmosclient"
 	"log"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -36,33 +37,24 @@ const PubKeyFileNameFormat = ".pem"
 
 const ValidatorName = "validator_account"
 const TotalValidatorNum = 3
-const Threshold = 2
 const isManager = true
 
 const AddressPrefix = "cosmos"
 
-func setupShareClient(pks []string) (string, error) {
+func setupShareClient(pks []string, totalValidatorNum uint64) (string, error) {
 	shareClient, err := shareAPIClient.NewShareAPIClient(ApiUrl, ManagerPrivateKey)
 	if err != nil {
 		return "", err
 	}
 
-	result, err := shareClient.Setup(TotalValidatorNum, Threshold, pks)
+	threshold := uint64(math.Ceil(float64(totalValidatorNum) * (2.0 / 3.0)))
+
+	result, err := shareClient.Setup(totalValidatorNum, threshold, pks)
 	if err != nil {
 		return "", err
 	}
 
 	return result.MPK, nil
-}
-
-var logger = log.New(os.Stdout, "", 0)
-
-func newLog(msg string) {
-	logger.SetPrefix(
-		time.Now().UTC().Format("2006/01/02 15:04:05") + " | " +
-			strconv.FormatInt(time.Now().UnixMilli(), 10) + ": ",
-	)
-	logger.Print(msg)
 }
 
 func main() {
@@ -85,12 +77,12 @@ func main() {
 			pks[i] = pk
 		}
 
-		_masterPublicKey, err := setupShareClient(pks)
+		_masterPublicKey, err := setupShareClient(pks, TotalValidatorNum)
 		if err != nil {
 			log.Fatal(err)
 		}
 		masterPublicKey = _masterPublicKey
-		log.Printf("Setup Result: %s", masterPublicKey)
+		// log.Printf("Setup Result: %s", masterPublicKey)
 	} else {
 		_masterPublicKey, err := shareClient.GetMasterPublicKey()
 
@@ -98,7 +90,7 @@ func main() {
 			log.Fatal(err)
 		}
 		masterPublicKey = _masterPublicKey
-		log.Printf("Got Master Public Key: %s", masterPublicKey)
+		// log.Printf("Got Master Public Key: %s", masterPublicKey)
 	}
 
 	// Create the cosmos client
@@ -156,7 +148,7 @@ func main() {
 	}
 	publicKeyInHex := hex.EncodeToString(decodedPublicKey)
 
-	log.Printf("Public key in Hex: %s", publicKeyInHex)
+	// log.Printf("Public key in Hex: %s", publicKeyInHex)
 
 	// Submit the pubkey & id to fairyring
 	if isManager {
@@ -171,7 +163,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		newLog("Manager Submitted latest public key")
+		log.Println("Manager Submitted latest public key")
 	}
 
 	for {
@@ -183,12 +175,16 @@ func main() {
 			processHeight := uint64(height + 1)
 			processHeightStr := strconv.FormatUint(processHeight, 10)
 
-			newLog("Got new block height: " + processHeightStr)
+			newHeightTime := time.Now()
+			log.Printf("Latest Block Height: %d | Getting Share for Block: %s\n", height, processHeightStr)
 
 			share, index, err := shareClient.GetShare(processHeightStr)
 			if err != nil {
 				log.Fatal(err)
 			}
+
+			gotShareTookTime := time.Since(newHeightTime)
+			gotShareTime := time.Now()
 
 			extractedKey := distIBE.Extract(s, share.Value, uint32(index), []byte(processHeightStr))
 			extractedKeyBinary, err := extractedKey.Sk.MarshalBinary()
@@ -197,8 +193,6 @@ func main() {
 			}
 			extractedKeyHex := hex.EncodeToString(extractedKeyBinary)
 
-			newLog("Share for height " + processHeightStr + ": " + extractedKeyHex)
-
 			commitmentPoint := s.G1().Point().Mul(share.Value, s.G1().Point().Base())
 			commitmentBinary, err := commitmentPoint.MarshalBinary()
 
@@ -206,23 +200,22 @@ func main() {
 				log.Fatal(err)
 			}
 
-			go func() {
-				broadcastMsg := &types.MsgSendKeyshare{
-					Creator:       addr,
-					Message:       extractedKeyHex,
-					Commitment:    hex.EncodeToString(commitmentBinary),
-					KeyShareIndex: index,
-					BlockHeight:   processHeight,
-				}
-				newLog("Broadcasting Keyshare for height: " + processHeightStr)
+			log.Printf("Got Share for height %s took: %d ms\n", processHeightStr, gotShareTookTime.Milliseconds())
 
-				_, err = cosmos.BroadcastTx(context.Background(), account, broadcastMsg)
-				if err != nil {
-					log.Fatal(err)
-				}
+			broadcastMsg := &types.MsgSendKeyshare{
+				Creator:       addr,
+				Message:       extractedKeyHex,
+				Commitment:    hex.EncodeToString(commitmentBinary),
+				KeyShareIndex: index,
+				BlockHeight:   processHeight,
+			}
 
-				newLog("Sent KeyShare at Block Height: " + processHeightStr + "\n")
-			}()
+			_, err = cosmos.BroadcastTx(context.Background(), account, broadcastMsg)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			log.Printf("Submit KeyShare for Height %s Confirmed | Took: %.1f s\n", processHeightStr, time.Since(gotShareTime).Seconds())
 		}
 	}
 }
