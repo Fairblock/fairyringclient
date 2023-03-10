@@ -10,6 +10,7 @@ import (
 	"fmt"
 	bls "github.com/drand/kyber-bls12381"
 	"github.com/ignite/cli/ignite/pkg/cosmosclient"
+	"github.com/joho/godotenv"
 	"log"
 	"math"
 	"os"
@@ -26,23 +27,8 @@ var (
 	interrupt chan os.Signal
 )
 
-const NodeDirPath = "/home/ubuntu/.fairyring/"
-const NodeIP = "http://172.17.0.2"
-const NodePort = "26657"
-const ApiUrl = "https://7d3q6i0uk2.execute-api.us-east-1.amazonaws.com"
-const ManagerPrivateKey = "keys/skManager.pem"
-const PrivateKeyFile = "keys/sk1.pem"
-const PubKeyFileNamePrefix = "keys/pk"
-const PubKeyFileNameFormat = ".pem"
-
-const ValidatorName = "validator_account"
-const TotalValidatorNum = 3
-const isManager = true
-
-const AddressPrefix = "cosmos"
-
-func setupShareClient(pks []string, totalValidatorNum uint64) (string, error) {
-	shareClient, err := shareAPIClient.NewShareAPIClient(ApiUrl, ManagerPrivateKey)
+func setupShareClient(pks []string, totalValidatorNum uint64, managerPrivateKey, apiUrl string) (string, error) {
+	shareClient, err := shareAPIClient.NewShareAPIClient(apiUrl, managerPrivateKey)
 	if err != nil {
 		return "", err
 	}
@@ -58,6 +44,38 @@ func setupShareClient(pks []string, totalValidatorNum uint64) (string, error) {
 }
 
 func main() {
+	// get all the variables from .env file
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
+	NodeDirPath := os.Getenv("NODE_DIR_PATH")
+	NodeIP := os.Getenv("NODE_IP_ADDRESS")
+	NodePort := os.Getenv("NODE_PORT")
+
+	TotalValidatorNumStr := os.Getenv("TOTAL_VALIDATOR_NUM")
+	TotalValidatorNum, err := strconv.ParseUint(TotalValidatorNumStr, 10, 64)
+	if err != nil {
+		log.Fatal("Error parsing total validator num from .env")
+	}
+
+	ValidatorName := os.Getenv("VALIDATOR_NAME")
+	IsManagerStr := os.Getenv("IS_MANAGER")
+	isManager, err := strconv.ParseBool(IsManagerStr)
+	if err != nil {
+		log.Fatal("Error parsing isManager from .env")
+	}
+
+	ManagerPrivateKey := os.Getenv("MANAGER_PRIVATE_KEY")
+	PrivateKeyFile := os.Getenv("PRIVATE_KEY_FILE")
+	PubKeyFileNamePrefix := os.Getenv("PUB_KEY_FILE_NAME_PREFIX")
+	PubKeyFileNameFormat := os.Getenv("PUB_KEY_FILE_NAME_FORMAT")
+
+	AddressPrefix := os.Getenv("ADDRESS_PREFIX")
+
+	ApiUrl := os.Getenv("API_URL")
+
 	var masterPublicKey string
 
 	shareClient, err := shareAPIClient.NewShareAPIClient(ApiUrl, PrivateKeyFile)
@@ -67,8 +85,8 @@ func main() {
 
 	if isManager {
 		pks := make([]string, TotalValidatorNum)
-
-		for i := 0; i < TotalValidatorNum; i++ {
+		var i uint64
+		for i = 0; i < TotalValidatorNum; i++ {
 			pk, err := readPemFile(fmt.Sprintf("%s%d%s", PubKeyFileNamePrefix, i+1, PubKeyFileNameFormat))
 			if err != nil {
 				log.Fatal(err)
@@ -77,12 +95,11 @@ func main() {
 			pks[i] = pk
 		}
 
-		_masterPublicKey, err := setupShareClient(pks, TotalValidatorNum)
+		_masterPublicKey, err := setupShareClient(pks, TotalValidatorNum, ManagerPrivateKey, ApiUrl)
 		if err != nil {
 			log.Fatal(err)
 		}
 		masterPublicKey = _masterPublicKey
-		// log.Printf("Setup Result: %s", masterPublicKey)
 	} else {
 		_masterPublicKey, err := shareClient.GetMasterPublicKey()
 
@@ -90,7 +107,6 @@ func main() {
 			log.Fatal(err)
 		}
 		masterPublicKey = _masterPublicKey
-		// log.Printf("Got Master Public Key: %s", masterPublicKey)
 	}
 
 	// Create the cosmos client
@@ -147,8 +163,6 @@ func main() {
 		log.Fatal(err)
 	}
 	publicKeyInHex := hex.EncodeToString(decodedPublicKey)
-
-	// log.Printf("Public key in Hex: %s", publicKeyInHex)
 
 	// Submit the pubkey & id to fairyring
 	if isManager {
