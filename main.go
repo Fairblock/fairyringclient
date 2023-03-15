@@ -6,10 +6,10 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fairyring/x/fairyring/types"
+	"fairyringclient/cosmosClient"
 	"fairyringclient/shareAPIClient"
 	"fmt"
 	bls "github.com/drand/kyber-bls12381"
-	"github.com/ignite/cli/ignite/pkg/cosmosclient"
 	"github.com/joho/godotenv"
 	"log"
 	"math"
@@ -50,9 +50,11 @@ func main() {
 		log.Fatal("Error loading .env file")
 	}
 
-	NodeDirPath := os.Getenv("NODE_DIR_PATH")
 	NodeIP := os.Getenv("NODE_IP_ADDRESS")
 	NodePort := os.Getenv("NODE_PORT")
+
+	gRPCIP := os.Getenv("GRPC_IP_ADDRESS")
+	gRPCPort := os.Getenv("GRPC_PORT")
 
 	TotalValidatorNumStr := os.Getenv("TOTAL_VALIDATOR_NUM")
 	TotalValidatorNum, err := strconv.ParseUint(TotalValidatorNumStr, 10, 64)
@@ -60,7 +62,6 @@ func main() {
 		log.Fatal("Error parsing total validator num from .env")
 	}
 
-	ValidatorName := os.Getenv("VALIDATOR_NAME")
 	IsManagerStr := os.Getenv("IS_MANAGER")
 	isManager, err := strconv.ParseBool(IsManagerStr)
 	if err != nil {
@@ -72,9 +73,21 @@ func main() {
 	PubKeyFileNamePrefix := os.Getenv("PUB_KEY_FILE_NAME_PREFIX")
 	PubKeyFileNameFormat := os.Getenv("PUB_KEY_FILE_NAME_FORMAT")
 
-	AddressPrefix := os.Getenv("ADDRESS_PREFIX")
-
 	ApiUrl := os.Getenv("API_URL")
+
+	PrivateKey := os.Getenv("VALIDATOR_PRIVATE_KEY")
+
+	myCosmosClient, err := cosmosClient.NewCosmosClient(
+		fmt.Sprintf("%s:%s", gRPCIP, gRPCPort),
+		PrivateKey,
+		"fairyring",
+	)
+	if err != nil {
+		log.Fatal("Error creating custom cosmos client: ", err)
+	}
+
+	addr := myCosmosClient.GetAddress()
+	log.Printf("Cosmos Client Loaded Address: %s\n", addr)
 
 	var masterPublicKey string
 
@@ -109,44 +122,22 @@ func main() {
 		masterPublicKey = _masterPublicKey
 	}
 
-	// Create the cosmos client
-	cosmos, err := cosmosclient.New(
-		context.Background(),
-		cosmosclient.WithAddressPrefix(AddressPrefix),
-		cosmosclient.WithNodeAddress(fmt.Sprintf("%s:%s", NodeIP, NodePort)),
-		cosmosclient.WithHome(NodeDirPath),
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	client, err := tmclient.New(fmt.Sprintf("%s:%s", NodeIP, NodePort), "/websocket")
 	err = client.Start()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	account, err := cosmos.Account(ValidatorName)
-	if err != nil {
-		log.Fatal(err)
-	}
-	addr, err := account.Address(AddressPrefix)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Printf("%s's address: %s\n", ValidatorName, addr)
-
-	msg := &types.MsgRegisterValidator{
+	_, err = myCosmosClient.BroadcastTx(&types.MsgRegisterValidator{
 		Creator: addr,
-	}
-	_, err = cosmos.BroadcastTx(context.Background(), account, msg)
+	})
 	if err != nil {
 		if !strings.Contains(err.Error(), "validator already registered") {
 			log.Fatal(err)
 		}
 	}
 
-	log.Printf("%s's Registered as Validator", ValidatorName)
+	log.Printf("%s Registered as Validator", addr)
 
 	query := "tm.event = 'NewBlockHeader'"
 	out, err := client.Subscribe(context.Background(), "", query)
@@ -166,9 +157,7 @@ func main() {
 
 	// Submit the pubkey & id to fairyring
 	if isManager {
-		_, err := cosmos.BroadcastTx(
-			context.Background(),
-			account,
+		_, err := myCosmosClient.BroadcastTx(
 			&types.MsgCreateLatestPubKey{
 				Creator:   addr,
 				PublicKey: publicKeyInHex,
@@ -216,20 +205,20 @@ func main() {
 
 			log.Printf("Got Share for height %s took: %d ms\n", processHeightStr, gotShareTookTime.Milliseconds())
 
-			broadcastMsg := &types.MsgSendKeyshare{
-				Creator:       addr,
-				Message:       extractedKeyHex,
-				Commitment:    hex.EncodeToString(commitmentBinary),
-				KeyShareIndex: index,
-				BlockHeight:   processHeight,
-			}
+			go func() {
+				_, err = myCosmosClient.BroadcastTx(&types.MsgSendKeyshare{
+					Creator:       addr,
+					Message:       extractedKeyHex,
+					Commitment:    hex.EncodeToString(commitmentBinary),
+					KeyShareIndex: index,
+					BlockHeight:   processHeight,
+				})
+				if err != nil {
+					log.Printf("Submit KeyShare for Height %s ERROR: %s | Took: %.1f s\n", processHeightStr, err.Error(), time.Since(gotShareTime).Seconds())
+				}
 
-			_, err = cosmos.BroadcastTx(context.Background(), account, broadcastMsg)
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			log.Printf("Submit KeyShare for Height %s Confirmed | Took: %.1f s\n", processHeightStr, time.Since(gotShareTime).Seconds())
+				log.Printf("Submit KeyShare for Height %s Confirmed | Took: %.1f s\n", processHeightStr, time.Since(gotShareTime).Seconds())
+			}()
 		}
 	}
 }
