@@ -13,16 +13,44 @@ mkdir keys
 2.Generate key using `ssh-keygen`
 
 ```bash
-ssh-keygen -t rsa -b 2048 -m PEM -f ./keys/sk1.pem
+ssh-keygen -t rsa -b 2048 -m PEM -f ./keys/sk1.pem -N ""
 ```
 
 3. Generate public key from the private key
 
 ```bash
-ssh-keygen -f ./keys/sk1.pem -e -m pem > ./keys/pk1.pem
+ssh-keygen -f ./keys/sk1.pem -e -m pem > ./keys/pk1.pub
 ```
 
 4. Gather all the public key and put them inside `keys/` and rename it as `pk{number}.pem` start the number from 1.
+
+### Generate multiple keys
+
+1. Create keys directory
+
+```bash
+mkdir keys
+```
+
+2. Run `generate_keys.sh`
+
+```bash
+./generate_keys.sh {start_at} {end_at}
+```
+
+#### Examples
+
+Let's say you would like to create two keys, from 1 to 2, enter the following command:
+
+```bash
+./generate_keys.sh 1 2
+```
+
+Let's say you would like to create only one keys, enter the following command:
+
+```bash
+./generate_keys.sh 1 1
+```
 
 ## Running client
 
