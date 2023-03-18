@@ -10,9 +10,15 @@ die () {
 echo $1 | grep -E -q '^[0-9]+$' || die "Numeric argument required, $1 provided"
 echo $2 | grep -E -q '^[0-9]+$' || die "Numeric argument required, $2 provided"
 
+privateKeysArray=()
+
 for i in $(seq $1 $2 $END)
 do
   ssh-keygen -t rsa -b 2048 -m PEM -f "./keys/sk$i.pem" -N ""
   ssh-keygen -f "./keys/sk$i.pem" -e -m pem > "./keys/pk$i.pub"
   rm "./keys/sk$i.pem.pub"
+  pKey=$(openssl rand -hex 32)
+  privateKeysArray+=($pKey)
 done
+
+printf '%s\n' "${privateKeysArray[@]}" | jq -R . | jq -s . > privateKeys.json

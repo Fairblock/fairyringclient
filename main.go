@@ -5,12 +5,15 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fairyring/x/fairyring/types"
 	"fairyringclient/cosmosClient"
 	"fairyringclient/shareAPIClient"
 	"fmt"
+	cosmostypes "github.com/cosmos/cosmos-sdk/types"
 	bls "github.com/drand/kyber-bls12381"
 	"github.com/joho/godotenv"
+	"io"
 	"log"
 	"math"
 	"os"
@@ -27,12 +30,10 @@ var (
 	interrupt chan os.Signal
 )
 
-func setupShareClient(pks []string, totalValidatorNum uint64, managerPrivateKey, apiUrl string) (string, error) {
-	shareClient, err := shareAPIClient.NewShareAPIClient(apiUrl, managerPrivateKey)
-	if err != nil {
-		return "", err
-	}
+const PubKeyFileNameFormat = ".pem"
+const PrivateKeyFileNameFormat = ".pem"
 
+func setupShareClient(shareClient shareAPIClient.ShareAPIClient, pks []string, totalValidatorNum uint64) (string, error) {
 	threshold := uint64(math.Ceil(float64(totalValidatorNum) * (2.0 / 3.0)))
 
 	result, err := shareClient.Setup(totalValidatorNum, threshold, pks)
@@ -43,7 +44,15 @@ func setupShareClient(pks []string, totalValidatorNum uint64, managerPrivateKey,
 	return result.MPK, nil
 }
 
+type ValidatorClients struct {
+	CosmosClient   *cosmosClient.CosmosClient
+	ShareApiClient *shareAPIClient.ShareAPIClient
+}
+
 func main() {
+	var masterCosmosClient ValidatorClients
+	var validatorCosmosClients []ValidatorClients
+
 	// get all the variables from .env file
 	err := godotenv.Load()
 	if err != nil {
@@ -69,32 +78,77 @@ func main() {
 	}
 
 	ManagerPrivateKey := os.Getenv("MANAGER_PRIVATE_KEY")
-	PrivateKeyFile := os.Getenv("PRIVATE_KEY_FILE")
+	PrivateKeyFileNamePrefix := os.Getenv("PRIVATE_KEY_FILE_NAME_PREFIX")
 	PubKeyFileNamePrefix := os.Getenv("PUB_KEY_FILE_NAME_PREFIX")
-	PubKeyFileNameFormat := os.Getenv("PUB_KEY_FILE_NAME_FORMAT")
 
 	ApiUrl := os.Getenv("API_URL")
 
-	PrivateKey := os.Getenv("VALIDATOR_PRIVATE_KEY")
+	MasterPrivateKey := os.Getenv("MASTER_PRIVATE_KEY")
+	if len(MasterPrivateKey) > 1 {
+		masterClient, err := cosmosClient.NewCosmosClient(
+			fmt.Sprintf("%s:%s", gRPCIP, gRPCPort),
+			MasterPrivateKey,
+			"fairyring",
+		)
+		if err != nil {
+			log.Fatal("Error creating custom cosmos client: ", err)
+		}
 
-	myCosmosClient, err := cosmosClient.NewCosmosClient(
-		fmt.Sprintf("%s:%s", gRPCIP, gRPCPort),
-		PrivateKey,
-		"fairyring",
-	)
-	if err != nil {
-		log.Fatal("Error creating custom cosmos client: ", err)
+		addr := masterClient.GetAddress()
+		bal, err := masterClient.GetBalance("frt")
+		if err != nil {
+			log.Fatal("Error getting master account balance: ", err)
+		}
+		log.Printf("Master Cosmos Client Loaded Address: %s , Balance: %s FRT\n", addr, bal.String())
+
+		shareClient, err := shareAPIClient.NewShareAPIClient(ApiUrl, ManagerPrivateKey)
+		if err != nil {
+			log.Fatal("Error creating share api client:", err)
+		}
+		masterCosmosClient = ValidatorClients{
+			CosmosClient:   masterClient,
+			ShareApiClient: shareClient,
+		}
 	}
 
-	addr := myCosmosClient.GetAddress()
-	log.Printf("Cosmos Client Loaded Address: %s\n", addr)
+	allPrivateKeys, err := readPrivateKeysJsonFile("privateKeys.json")
+	if err != nil {
+		log.Fatal("Error loading private keys json: ", err)
+	}
+
+	validatorCosmosClients = make([]ValidatorClients, len(allPrivateKeys))
+
+	log.Println("Loading total:", len(allPrivateKeys), "private key(s)")
+
+	allAccAddrs := make([]cosmostypes.AccAddress, len(allPrivateKeys))
+
+	for index, eachPKey := range allPrivateKeys {
+		eachClient, err := cosmosClient.NewCosmosClient(
+			fmt.Sprintf("%s:%s", gRPCIP, gRPCPort),
+			eachPKey,
+			"fairyring",
+		)
+		if err != nil {
+			log.Fatal("Error creating custom cosmos client: ", err)
+		}
+
+		addr := eachClient.GetAddress()
+		log.Printf("Validator Cosmos Client Loaded Address: %s\n", addr)
+
+		shareClient, err := shareAPIClient.NewShareAPIClient(ApiUrl, fmt.Sprintf("%s%d%s", PrivateKeyFileNamePrefix, index+1, PrivateKeyFileNameFormat))
+		if err != nil {
+			log.Fatal("Error creating share api client:", err)
+		}
+
+		validatorCosmosClients[index] = ValidatorClients{
+			CosmosClient:   eachClient,
+			ShareApiClient: shareClient,
+		}
+
+		allAccAddrs[index] = eachClient.GetAccAddress()
+	}
 
 	var masterPublicKey string
-
-	shareClient, err := shareAPIClient.NewShareAPIClient(ApiUrl, PrivateKeyFile)
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	if isManager {
 		pks := make([]string, TotalValidatorNum)
@@ -108,13 +162,13 @@ func main() {
 			pks[i] = pk
 		}
 
-		_masterPublicKey, err := setupShareClient(pks, TotalValidatorNum, ManagerPrivateKey, ApiUrl)
+		_masterPublicKey, err := setupShareClient(*masterCosmosClient.ShareApiClient, pks, TotalValidatorNum)
 		if err != nil {
 			log.Fatal(err)
 		}
 		masterPublicKey = _masterPublicKey
 	} else {
-		_masterPublicKey, err := shareClient.GetMasterPublicKey()
+		_masterPublicKey, err := validatorCosmosClients[0].ShareApiClient.GetMasterPublicKey()
 
 		if err != nil {
 			log.Fatal(err)
@@ -128,16 +182,18 @@ func main() {
 		log.Fatal(err)
 	}
 
-	_, err = myCosmosClient.BroadcastTx(&types.MsgRegisterValidator{
-		Creator: addr,
-	})
-	if err != nil {
-		if !strings.Contains(err.Error(), "validator already registered") {
-			log.Fatal(err)
+	for i, eachClient := range validatorCosmosClients {
+		eachAddr := eachClient.CosmosClient.GetAddress()
+		_, err = eachClient.CosmosClient.BroadcastTx(&types.MsgRegisterValidator{
+			Creator: eachAddr,
+		})
+		if err != nil {
+			if !strings.Contains(err.Error(), "validator already registered") {
+				log.Fatal(err)
+			}
 		}
+		log.Printf("%d. %s Registered as Validator", i, eachAddr)
 	}
-
-	log.Printf("%s Registered as Validator", addr)
 
 	query := "tm.event = 'NewBlockHeader'"
 	out, err := client.Subscribe(context.Background(), "", query)
@@ -157,9 +213,9 @@ func main() {
 
 	// Submit the pubkey & id to fairyring
 	if isManager {
-		_, err := myCosmosClient.BroadcastTx(
+		_, err := masterCosmosClient.CosmosClient.BroadcastTx(
 			&types.MsgCreateLatestPubKey{
-				Creator:   addr,
+				Creator:   masterCosmosClient.CosmosClient.GetAddress(),
 				PublicKey: publicKeyInHex,
 			},
 		)
@@ -181,44 +237,46 @@ func main() {
 			newHeightTime := time.Now()
 			log.Printf("Latest Block Height: %d | Getting Share for Block: %s\n", height, processHeightStr)
 
-			share, index, err := shareClient.GetShare(processHeightStr)
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			gotShareTookTime := time.Since(newHeightTime)
-			gotShareTime := time.Now()
-
-			extractedKey := distIBE.Extract(s, share.Value, uint32(index), []byte(processHeightStr))
-			extractedKeyBinary, err := extractedKey.Sk.MarshalBinary()
-			if err != nil {
-				log.Fatal(err)
-			}
-			extractedKeyHex := hex.EncodeToString(extractedKeyBinary)
-
-			commitmentPoint := s.G1().Point().Mul(share.Value, s.G1().Point().Base())
-			commitmentBinary, err := commitmentPoint.MarshalBinary()
-
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			log.Printf("Got Share for height %s took: %d ms\n", processHeightStr, gotShareTookTime.Milliseconds())
-
-			go func() {
-				_, err = myCosmosClient.BroadcastTx(&types.MsgSendKeyshare{
-					Creator:       addr,
-					Message:       extractedKeyHex,
-					Commitment:    hex.EncodeToString(commitmentBinary),
-					KeyShareIndex: index,
-					BlockHeight:   processHeight,
-				})
+			for i, each := range validatorCosmosClients {
+				share, index, err := each.ShareApiClient.GetShare(processHeightStr)
 				if err != nil {
-					log.Printf("Submit KeyShare for Height %s ERROR: %s | Took: %.1f s\n", processHeightStr, err.Error(), time.Since(gotShareTime).Seconds())
+					log.Fatal(err)
 				}
 
-				log.Printf("Submit KeyShare for Height %s Confirmed | Took: %.1f s\n", processHeightStr, time.Since(gotShareTime).Seconds())
-			}()
+				gotShareTookTime := time.Since(newHeightTime)
+				gotShareTime := time.Now()
+
+				extractedKey := distIBE.Extract(s, share.Value, uint32(index), []byte(processHeightStr))
+				extractedKeyBinary, err := extractedKey.Sk.MarshalBinary()
+				if err != nil {
+					log.Fatal(err)
+				}
+				extractedKeyHex := hex.EncodeToString(extractedKeyBinary)
+
+				commitmentPoint := s.G1().Point().Mul(share.Value, s.G1().Point().Base())
+				commitmentBinary, err := commitmentPoint.MarshalBinary()
+
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				log.Printf("[%d] Got Share for height %s took: %d ms\n", i, processHeightStr, gotShareTookTime.Milliseconds())
+
+				go func() {
+					_, err = each.CosmosClient.BroadcastTx(&types.MsgSendKeyshare{
+						Creator:       each.CosmosClient.GetAddress(),
+						Message:       extractedKeyHex,
+						Commitment:    hex.EncodeToString(commitmentBinary),
+						KeyShareIndex: index,
+						BlockHeight:   processHeight,
+					})
+					if err != nil {
+						log.Printf("[%d] Submit KeyShare for Height %s ERROR: %s | Took: %.1f s\n", i, processHeightStr, err.Error(), time.Since(gotShareTime).Seconds())
+					}
+
+					log.Printf("[%d] Submit KeyShare for Height %s Confirmed | Took: %.1f s\n", i, processHeightStr, time.Since(gotShareTime).Seconds())
+				}()
+			}
 		}
 	}
 }
@@ -244,4 +302,27 @@ func readPemFile(filePath string) (string, error) {
 	}
 
 	return string(pemBytes), nil
+}
+
+func readPrivateKeysJsonFile(filePath string) ([]string, error) {
+	jsonFile, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	defer jsonFile.Close()
+
+	var keys []string
+
+	byteValue, err := io.ReadAll(jsonFile)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(byteValue, &keys)
+	if err != nil {
+		return nil, err
+	}
+
+	return keys, nil
 }

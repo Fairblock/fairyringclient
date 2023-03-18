@@ -3,3 +3,4 @@
 keys/
 encrypter
 .env
+privateKeys.json
