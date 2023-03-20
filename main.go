@@ -3,6 +3,7 @@ package main
 import (
 	distIBE "DistributedIBE"
 	"context"
+	cosmosmath "cosmossdk.io/math"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -83,6 +84,7 @@ func main() {
 
 	ApiUrl := os.Getenv("API_URL")
 
+	// Import Master Private Key & Create Clients
 	MasterPrivateKey := os.Getenv("MASTER_PRIVATE_KEY")
 	if len(MasterPrivateKey) > 1 {
 		masterClient, err := cosmosClient.NewCosmosClient(
@@ -129,11 +131,29 @@ func main() {
 			"fairyring",
 		)
 		if err != nil {
-			log.Fatal("Error creating custom cosmos client: ", err)
-		}
+			accAddr, err := cosmosClient.PrivateKeyToAccAddress(eachPKey)
+			if err != nil {
+				log.Fatal("Error extract address from private key: ", err)
+			}
+			resp, err := masterCosmosClient.CosmosClient.SendToken(accAddr.String(), "frt", cosmosmath.NewInt(1))
+			if err != nil {
+				log.Fatal("Error activating account: ", accAddr.String(), ": ", err)
+			}
 
-		addr := eachClient.GetAddress()
-		log.Printf("Validator Cosmos Client Loaded Address: %s\n", addr)
+			log.Println("Successfully activate account: ", accAddr.String(), "\n", resp)
+			_eachClient, err := cosmosClient.NewCosmosClient(
+				fmt.Sprintf("%s:%s", gRPCIP, gRPCPort),
+				eachPKey,
+				"fairyring",
+			)
+			if err != nil {
+				log.Fatal("Error creating custom cosmos client: ", err)
+			}
+			eachClient = _eachClient
+		} else {
+			addr := eachClient.GetAddress()
+			log.Printf("Validator Cosmos Client Loaded Address: %s\n", addr)
+		}
 
 		shareClient, err := shareAPIClient.NewShareAPIClient(ApiUrl, fmt.Sprintf("%s%d%s", PrivateKeyFileNamePrefix, index+1, PrivateKeyFileNameFormat))
 		if err != nil {

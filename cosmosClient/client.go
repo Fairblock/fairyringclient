@@ -32,6 +32,17 @@ type CosmosClient struct {
 	chainID         string
 }
 
+func PrivateKeyToAccAddress(privateKeyHex string) (cosmostypes.AccAddress, error) {
+	keyBytes, err := hex.DecodeString(privateKeyHex)
+	if err != nil {
+		return nil, err
+	}
+
+	privateKey := secp256k1.PrivKey{Key: keyBytes}
+
+	return cosmostypes.AccAddress(privateKey.PubKey().Address()), nil
+}
+
 func NewCosmosClient(
 	endpoint string,
 	privateKeyHex string,
