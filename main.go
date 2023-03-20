@@ -173,11 +173,14 @@ func main() {
 			),
 		)
 
-		privateKeyIndexNum++
-
 		if err != nil {
 			log.Fatal("Error creating share api client:", err)
 		}
+
+		privateKeyIndexNum++
+
+		share, shareIndex := shareClient.GetKeyShare()
+		log.Printf("Got share: %s | Index: %d", share, shareIndex)
 
 		bal, err := eachClient.GetBalance("frt")
 		if err != nil {
@@ -286,21 +289,13 @@ func main() {
 			processHeight := uint64(height + 1)
 			processHeightStr := strconv.FormatUint(processHeight, 10)
 
-			newHeightTime := time.Now()
-			log.Printf("Latest Block Height: %d | Getting Share for Block: %s\n", height, processHeightStr)
+			log.Printf("Latest Block Height: %d | Deriving Share for Height: %s\n", height, processHeightStr)
 
 			for i, each := range validatorCosmosClients {
 				nowI := i
 				nowEach := each
 				go func() {
-					share, index, err := nowEach.ShareApiClient.GetShare(processHeightStr)
-					if err != nil {
-						log.Printf("[%d] Error on getting share", nowI)
-						return
-					}
-
-					gotShareTookTime := time.Since(newHeightTime)
-					gotShareTime := time.Now()
+					share, index := nowEach.ShareApiClient.GetKeyShare()
 
 					extractedKey := distIBE.Extract(s, share.Value, uint32(index), []byte(processHeightStr))
 					extractedKeyBinary, err := extractedKey.Sk.MarshalBinary()
@@ -316,8 +311,6 @@ func main() {
 						log.Fatal(err)
 					}
 
-					log.Printf("[%d] Got Share for height %s took: %d ms\n", nowI, processHeightStr, gotShareTookTime.Milliseconds())
-
 					go func() {
 						_, err = nowEach.CosmosClient.BroadcastTx(&types.MsgSendKeyshare{
 							Creator:       nowEach.CosmosClient.GetAddress(),
@@ -327,10 +320,10 @@ func main() {
 							BlockHeight:   processHeight,
 						})
 						if err != nil {
-							log.Printf("[%d] Submit KeyShare for Height %s ERROR: %s | Took: %.1f s\n", nowI, processHeightStr, err.Error(), time.Since(gotShareTime).Seconds())
+							log.Printf("[%d] Submit KeyShare for Height %s ERROR: %s\n", nowI, processHeightStr, err.Error())
 						}
 
-						log.Printf("[%d] Submit KeyShare for Height %s Confirmed | Took: %.1f s\n", nowI, processHeightStr, time.Since(gotShareTime).Seconds())
+						log.Printf("[%d] Submit KeyShare for Height %s Confirmed\n", nowI, processHeightStr)
 					}()
 				}()
 			}

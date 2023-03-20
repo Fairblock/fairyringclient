@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
+	"time"
 )
 
 func pemToPrivateKey(fileName string) (*rsa.PrivateKey, error) {
@@ -59,4 +61,8 @@ func bytesToPemStr(b []byte, types string) (string, error) {
 	}
 
 	return dst.String(), nil
+}
+
+func getNowStr() string {
+	return strconv.FormatInt(time.Now().Unix(), 10)
 }
