@@ -204,7 +204,7 @@ func (c *CosmosClient) signTxMsg(msg cosmostypes.Msg) ([]byte, error) {
 		return nil, err
 	}
 
-	txBuilder.SetGasLimit(100000)
+	txBuilder.SetGasLimit(300000)
 
 	signerData := authsigning.SignerData{
 		ChainID:       c.chainID,
