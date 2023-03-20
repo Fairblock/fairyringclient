@@ -295,7 +295,8 @@ func main() {
 				go func() {
 					share, index, err := nowEach.ShareApiClient.GetShare(processHeightStr)
 					if err != nil {
-						log.Fatal(err)
+						log.Printf("[%d] Error on getting share", nowI)
+						return
 					}
 
 					gotShareTookTime := time.Since(newHeightTime)
