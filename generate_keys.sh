@@ -15,7 +15,7 @@ privateKeysArray=()
 for i in $(seq $1 $2 $END)
 do
   ssh-keygen -t rsa -b 2048 -m PEM -f "./keys/sk$i.pem" -N ""
-  ssh-keygen -f "./keys/sk$i.pem" -e -m pem > "./keys/pk$i.pub"
+  ssh-keygen -f "./keys/sk$i.pem" -e -m pem > "./keys/pk$i.pem"
   rm "./keys/sk$i.pem.pub"
   pKey=$(openssl rand -hex 32)
   privateKeysArray+=($pKey)
