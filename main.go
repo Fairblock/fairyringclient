@@ -60,14 +60,7 @@ func main() {
 		log.Fatal("Error loading .env file")
 	}
 
-	NodeIP := os.Getenv("NODE_IP_ADDRESS")
-	NodePort := os.Getenv("NODE_PORT")
-
-	gRPCIP := os.Getenv("GRPC_IP_ADDRESS")
-	gRPCPort := os.Getenv("GRPC_PORT")
-
-	TotalValidatorNumStr := os.Getenv("TOTAL_VALIDATOR_NUM")
-	TotalValidatorNum, err := strconv.ParseUint(TotalValidatorNumStr, 10, 64)
+	TotalValidatorNum, err := strconv.ParseUint(os.Getenv("TOTAL_VALIDATOR_NUM"), 10, 64)
 	if err != nil {
 		log.Fatal("Error parsing total validator num from .env")
 	}
@@ -78,17 +71,19 @@ func main() {
 		log.Fatal("Error parsing isManager from .env")
 	}
 
-	ManagerPrivateKey := os.Getenv("MANAGER_PRIVATE_KEY")
-	PrivateKeyFileNamePrefix := os.Getenv("PRIVATE_KEY_FILE_NAME_PREFIX")
-	PubKeyFileNamePrefix := os.Getenv("PUB_KEY_FILE_NAME_PREFIX")
-
+	gRPCIP := os.Getenv("GRPC_IP_ADDRESS")
+	gRPCPort := os.Getenv("GRPC_PORT")
 	ApiUrl := os.Getenv("API_URL")
 
 	// Import Master Private Key & Create Clients
 	MasterPrivateKey := os.Getenv("MASTER_PRIVATE_KEY")
 	if len(MasterPrivateKey) > 1 {
 		masterClient, err := cosmosClient.NewCosmosClient(
-			fmt.Sprintf("%s:%s", gRPCIP, gRPCPort),
+			fmt.Sprintf(
+				"%s:%s",
+				gRPCIP,
+				gRPCPort,
+			),
 			MasterPrivateKey,
 			"fairyring",
 		)
@@ -103,7 +98,7 @@ func main() {
 		}
 		log.Printf("Master Cosmos Client Loaded Address: %s , Balance: %s FRT\n", addr, bal.String())
 
-		shareClient, err := shareAPIClient.NewShareAPIClient(ApiUrl, ManagerPrivateKey)
+		shareClient, err := shareAPIClient.NewShareAPIClient(ApiUrl, os.Getenv("MANAGER_PRIVATE_KEY"))
 		if err != nil {
 			log.Fatal("Error creating share api client:", err)
 		}
@@ -123,6 +118,13 @@ func main() {
 	log.Println("Loading total:", len(allPrivateKeys), "private key(s)")
 
 	allAccAddrs := make([]cosmostypes.AccAddress, len(allPrivateKeys))
+
+	privateKeyIndexStr := os.Getenv("PRIVATE_KEY_FILE_NAME_INDEX_START_AT")
+	privateKeyIndexNum, err := strconv.ParseUint(privateKeyIndexStr, 10, 64)
+	if err != nil {
+		log.Println("Error loading private index, setting it to default value: 1")
+		privateKeyIndexNum = 1
+	}
 
 	for index, eachPKey := range allPrivateKeys {
 		eachClient, err := cosmosClient.NewCosmosClient(
@@ -161,7 +163,18 @@ func main() {
 			log.Printf("Validator Cosmos Client Loaded Address: %s\n", addr)
 		}
 
-		shareClient, err := shareAPIClient.NewShareAPIClient(ApiUrl, fmt.Sprintf("%s%d%s", PrivateKeyFileNamePrefix, index+1, PrivateKeyFileNameFormat))
+		shareClient, err := shareAPIClient.NewShareAPIClient(
+			ApiUrl,
+			fmt.Sprintf(
+				"%s%d%s",
+				os.Getenv("PRIVATE_KEY_FILE_NAME_PREFIX"),
+				privateKeyIndexNum,
+				PrivateKeyFileNameFormat,
+			),
+		)
+
+		privateKeyIndexNum++
+
 		if err != nil {
 			log.Fatal("Error creating share api client:", err)
 		}
@@ -186,7 +199,7 @@ func main() {
 		pks := make([]string, TotalValidatorNum)
 		var i uint64
 		for i = 0; i < TotalValidatorNum; i++ {
-			pk, err := readPemFile(fmt.Sprintf("%s%d%s", PubKeyFileNamePrefix, i+1, PubKeyFileNameFormat))
+			pk, err := readPemFile(fmt.Sprintf("%s%d%s", os.Getenv("PUB_KEY_FILE_NAME_PREFIX"), i+1, PubKeyFileNameFormat))
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -208,7 +221,14 @@ func main() {
 		masterPublicKey = _masterPublicKey
 	}
 
-	client, err := tmclient.New(fmt.Sprintf("%s:%s", NodeIP, NodePort), "/websocket")
+	client, err := tmclient.New(
+		fmt.Sprintf(
+			"%s:%s",
+			os.Getenv("NODE_IP_ADDRESS"),
+			os.Getenv("NODE_PORT"),
+		),
+		"/websocket",
+	)
 	err = client.Start()
 	if err != nil {
 		log.Fatal(err)
