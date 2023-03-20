@@ -48,6 +48,8 @@ func setupShareClient(shareClient shareAPIClient.ShareAPIClient, pks []string, t
 type ValidatorClients struct {
 	CosmosClient   *cosmosClient.CosmosClient
 	ShareApiClient *shareAPIClient.ShareAPIClient
+	Share          distIBE.Share
+	Index          uint64
 }
 
 func main() {
@@ -179,7 +181,10 @@ func main() {
 
 		privateKeyIndexNum++
 
-		share, shareIndex := shareClient.GetKeyShare()
+		share, shareIndex, err := shareClient.GetShare(getNowStr())
+		if err != nil {
+			log.Fatal("Error getting share:", err)
+		}
 		log.Printf("Got share: %s | Index: %d", share, shareIndex)
 
 		bal, err := eachClient.GetBalance("frt")
@@ -191,6 +196,8 @@ func main() {
 		validatorCosmosClients[index] = ValidatorClients{
 			CosmosClient:   eachClient,
 			ShareApiClient: shareClient,
+			Share:          *share,
+			Index:          shareIndex,
 		}
 
 		allAccAddrs[index] = eachClient.GetAccAddress()
@@ -295,7 +302,8 @@ func main() {
 				nowI := i
 				nowEach := each
 				go func() {
-					share, index := nowEach.ShareApiClient.GetKeyShare()
+					share := nowEach.Share
+					index := nowEach.Index
 
 					extractedKey := distIBE.Extract(s, share.Value, uint32(index), []byte(processHeightStr))
 					extractedKeyBinary, err := extractedKey.Sk.MarshalBinary()
@@ -375,4 +383,8 @@ func readPrivateKeysJsonFile(filePath string) ([]string, error) {
 	}
 
 	return keys, nil
+}
+
+func getNowStr() string {
+	return strconv.FormatInt(time.Now().Unix(), 10)
 }

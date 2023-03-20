@@ -26,8 +26,6 @@ type ShareAPIClient struct {
 	Client     http.Client
 	pubKey     string
 	privateKey rsa.PrivateKey
-	keyShare   distIBE.Share
-	index      uint64
 }
 
 func NewShareAPIClient(url, privateKeyPath string) (*ShareAPIClient, error) {
@@ -41,26 +39,12 @@ func NewShareAPIClient(url, privateKeyPath string) (*ShareAPIClient, error) {
 		return nil, err
 	}
 
-	client := &ShareAPIClient{
+	return &ShareAPIClient{
 		URL:        url,
 		Client:     http.Client{},
 		pubKey:     pubKeyStr,
 		privateKey: *pKey,
-	}
-
-	share, index, err := client.getShare(getNowStr())
-	if err != nil {
-		return nil, err
-	}
-
-	client.keyShare = *share
-	client.index = index
-
-	return client, nil
-}
-
-func (s ShareAPIClient) GetKeyShare() (distIBE.Share, uint64) {
-	return s.keyShare, s.index
+	}, nil
 }
 
 func (s ShareAPIClient) signMessage(message []byte) (string, error) {
@@ -118,7 +102,7 @@ func (s ShareAPIClient) doRequest(path, method, body string) ([]byte, error) {
 	return resBody, nil
 }
 
-func (s ShareAPIClient) getShare(msg string) (*distIBE.Share, uint64, error) {
+func (s ShareAPIClient) GetShare(msg string) (*distIBE.Share, uint64, error) {
 	signed, err := s.signMessage([]byte(msg))
 	if err != nil {
 		return nil, 0, err
