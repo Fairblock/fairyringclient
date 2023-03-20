@@ -24,7 +24,6 @@ type CosmosClient struct {
 	authClient      authtypes.QueryClient
 	txClient        tx.ServiceClient
 	bankQueryClient banktypes.QueryClient
-	bankMsgClient   banktypes.MsgClient
 	privateKey      secp256k1.PrivKey
 	publicKey       cryptotypes.PubKey
 	account         authtypes.BaseAccount
@@ -58,7 +57,6 @@ func NewCosmosClient(
 
 	authClient := authtypes.NewQueryClient(grpcConn)
 	bankClient := banktypes.NewQueryClient(grpcConn)
-	bankMsgClient := banktypes.NewMsgClient(grpcConn)
 
 	keyBytes, err := hex.DecodeString(privateKeyHex)
 	if err != nil {
@@ -91,7 +89,6 @@ func NewCosmosClient(
 
 	return &CosmosClient{
 		bankQueryClient: bankClient,
-		bankMsgClient:   bankMsgClient,
 		authClient:      authClient,
 		txClient:        tx.NewServiceClient(grpcConn),
 		privateKey:      privateKey,
@@ -117,15 +114,16 @@ func (c *CosmosClient) GetBalance(denom string) (*math.Int, error) {
 }
 
 func (c *CosmosClient) SendToken(target, denom string, amount math.Int) (*banktypes.MsgSendResponse, error) {
-	resp, err := c.bankMsgClient.Send(
-		context.Background(),
-		&banktypes.MsgSend{
-			FromAddress: c.GetAddress(),
-			ToAddress:   target,
-			Amount:      cosmostypes.NewCoins(cosmostypes.NewCoin(denom, amount)),
-		},
-	)
-	return resp, err
+	resp, err := c.BroadcastTx(&banktypes.MsgSend{
+		FromAddress: c.GetAddress(),
+		ToAddress:   target,
+		Amount:      cosmostypes.NewCoins(cosmostypes.NewCoin(denom, amount)),
+	})
+	log.Println(resp)
+	var bankResp banktypes.MsgSendResponse
+	bankResp.Unmarshal(resp.Tx.GetValue())
+
+	return &bankResp, err
 }
 
 func (c *CosmosClient) MultiSend(denom string, totalAmount, eachAmt math.Int, targets []cosmostypes.AccAddress) (*banktypes.MsgMultiSendResponse, error) {
@@ -133,14 +131,15 @@ func (c *CosmosClient) MultiSend(denom string, totalAmount, eachAmt math.Int, ta
 	for i, each := range targets {
 		outputs[i] = banktypes.NewOutput(each, cosmostypes.NewCoins(cosmostypes.NewCoin(denom, eachAmt)))
 	}
-	resp, err := c.bankMsgClient.MultiSend(
-		context.Background(),
-		&banktypes.MsgMultiSend{
-			Inputs:  []banktypes.Input{banktypes.NewInput(c.accAddress, cosmostypes.NewCoins(cosmostypes.NewCoin(denom, totalAmount)))},
-			Outputs: outputs,
-		},
-	)
-	return resp, err
+	resp, err := c.BroadcastTx(&banktypes.MsgMultiSend{
+		Inputs:  []banktypes.Input{banktypes.NewInput(c.accAddress, cosmostypes.NewCoins(cosmostypes.NewCoin(denom, totalAmount)))},
+		Outputs: outputs,
+	})
+
+	var bankResp banktypes.MsgMultiSendResponse
+	bankResp.Unmarshal(resp.Tx.GetValue())
+
+	return &bankResp, err
 }
 
 func (c *CosmosClient) GetAddress() string {
