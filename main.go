@@ -146,7 +146,7 @@ func main() {
 			}
 
 			log.Println("Successfully activate account: ", accAddr.String())
-			
+
 			_eachClient, err := cosmosClient.NewCosmosClient(
 				fmt.Sprintf("%s:%s", gRPCIP, gRPCPort),
 				eachPKey,

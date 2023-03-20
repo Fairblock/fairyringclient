@@ -8,12 +8,14 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	bls "github.com/drand/kyber-bls12381"
 	"github.com/tendermint/tendermint/libs/json"
 	"github.com/tendermint/tendermint/types/time"
 	"io"
 	"log"
+	"math/big"
 	"net/http"
 	"strconv"
 	"strings"
@@ -146,10 +148,12 @@ func (s ShareAPIClient) GetShare(msg string) (*distIBE.Share, uint64, error) {
 		return nil, 0, err
 	}
 
-	indexInt, err := strconv.ParseUint(strings.TrimLeft(parsedGetShareResp.Index, "0"), 10, 64)
+	indexByte, err := hex.DecodeString(parsedGetShareResp.Index)
 	if err != nil {
 		return nil, 0, err
 	}
+
+	indexInt := big.NewInt(0).SetBytes(indexByte).Uint64()
 
 	return &distIBE.Share{
 		Index: bls.NewKyberScalar().SetInt64(int64(indexInt)),
