@@ -113,20 +113,16 @@ func (c *CosmosClient) GetBalance(denom string) (*math.Int, error) {
 	return &resp.Balance.Amount, nil
 }
 
-func (c *CosmosClient) SendToken(target, denom string, amount math.Int) (*banktypes.MsgSendResponse, error) {
+func (c *CosmosClient) SendToken(target, denom string, amount math.Int) (*cosmostypes.TxResponse, error) {
 	resp, err := c.BroadcastTx(&banktypes.MsgSend{
 		FromAddress: c.GetAddress(),
 		ToAddress:   target,
 		Amount:      cosmostypes.NewCoins(cosmostypes.NewCoin(denom, amount)),
 	})
-	log.Println(resp)
-	var bankResp banktypes.MsgSendResponse
-	bankResp.Unmarshal(resp.Tx.GetValue())
-
-	return &bankResp, err
+	return resp, err
 }
 
-func (c *CosmosClient) MultiSend(denom string, totalAmount, eachAmt math.Int, targets []cosmostypes.AccAddress) (*banktypes.MsgMultiSendResponse, error) {
+func (c *CosmosClient) MultiSend(denom string, totalAmount, eachAmt math.Int, targets []cosmostypes.AccAddress) (*cosmostypes.TxResponse, error) {
 	outputs := make([]banktypes.Output, len(targets))
 	for i, each := range targets {
 		outputs[i] = banktypes.NewOutput(each, cosmostypes.NewCoins(cosmostypes.NewCoin(denom, eachAmt)))
@@ -136,10 +132,7 @@ func (c *CosmosClient) MultiSend(denom string, totalAmount, eachAmt math.Int, ta
 		Outputs: outputs,
 	})
 
-	var bankResp banktypes.MsgMultiSendResponse
-	bankResp.Unmarshal(resp.Tx.GetValue())
-
-	return &bankResp, err
+	return resp, err
 }
 
 func (c *CosmosClient) GetAddress() string {

@@ -135,7 +135,7 @@ func main() {
 			if err != nil {
 				log.Fatal("Error extract address from private key: ", err)
 			}
-			resp, err := masterCosmosClient.CosmosClient.SendToken(accAddr.String(), "frt", cosmosmath.NewInt(1))
+			resp, err := masterCosmosClient.CosmosClient.SendToken(accAddr.String(), "frt", cosmosmath.NewInt(10))
 			if err != nil {
 				log.Fatal("Error activating account: ", accAddr.String(), ": ", err)
 			}
