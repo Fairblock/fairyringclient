@@ -264,43 +264,47 @@ func main() {
 			log.Printf("Latest Block Height: %d | Getting Share for Block: %s\n", height, processHeightStr)
 
 			for i, each := range validatorCosmosClients {
-				share, index, err := each.ShareApiClient.GetShare(processHeightStr)
-				if err != nil {
-					log.Fatal(err)
-				}
-
-				gotShareTookTime := time.Since(newHeightTime)
-				gotShareTime := time.Now()
-
-				extractedKey := distIBE.Extract(s, share.Value, uint32(index), []byte(processHeightStr))
-				extractedKeyBinary, err := extractedKey.Sk.MarshalBinary()
-				if err != nil {
-					log.Fatal(err)
-				}
-				extractedKeyHex := hex.EncodeToString(extractedKeyBinary)
-
-				commitmentPoint := s.G1().Point().Mul(share.Value, s.G1().Point().Base())
-				commitmentBinary, err := commitmentPoint.MarshalBinary()
-
-				if err != nil {
-					log.Fatal(err)
-				}
-
-				log.Printf("[%d] Got Share for height %s took: %d ms\n", i, processHeightStr, gotShareTookTime.Milliseconds())
-
+				nowI := i
+				nowEach := each
 				go func() {
-					_, err = each.CosmosClient.BroadcastTx(&types.MsgSendKeyshare{
-						Creator:       each.CosmosClient.GetAddress(),
-						Message:       extractedKeyHex,
-						Commitment:    hex.EncodeToString(commitmentBinary),
-						KeyShareIndex: index,
-						BlockHeight:   processHeight,
-					})
+					share, index, err := nowEach.ShareApiClient.GetShare(processHeightStr)
 					if err != nil {
-						log.Printf("[%d] Submit KeyShare for Height %s ERROR: %s | Took: %.1f s\n", i, processHeightStr, err.Error(), time.Since(gotShareTime).Seconds())
+						log.Fatal(err)
 					}
 
-					log.Printf("[%d] Submit KeyShare for Height %s Confirmed | Took: %.1f s\n", i, processHeightStr, time.Since(gotShareTime).Seconds())
+					gotShareTookTime := time.Since(newHeightTime)
+					gotShareTime := time.Now()
+
+					extractedKey := distIBE.Extract(s, share.Value, uint32(index), []byte(processHeightStr))
+					extractedKeyBinary, err := extractedKey.Sk.MarshalBinary()
+					if err != nil {
+						log.Fatal(err)
+					}
+					extractedKeyHex := hex.EncodeToString(extractedKeyBinary)
+
+					commitmentPoint := s.G1().Point().Mul(share.Value, s.G1().Point().Base())
+					commitmentBinary, err := commitmentPoint.MarshalBinary()
+
+					if err != nil {
+						log.Fatal(err)
+					}
+
+					log.Printf("[%d] Got Share for height %s took: %d ms\n", nowI, processHeightStr, gotShareTookTime.Milliseconds())
+
+					go func() {
+						_, err = nowEach.CosmosClient.BroadcastTx(&types.MsgSendKeyshare{
+							Creator:       nowEach.CosmosClient.GetAddress(),
+							Message:       extractedKeyHex,
+							Commitment:    hex.EncodeToString(commitmentBinary),
+							KeyShareIndex: index,
+							BlockHeight:   processHeight,
+						})
+						if err != nil {
+							log.Printf("[%d] Submit KeyShare for Height %s ERROR: %s | Took: %.1f s\n", nowI, processHeightStr, err.Error(), time.Since(gotShareTime).Seconds())
+						}
+
+						log.Printf("[%d] Submit KeyShare for Height %s Confirmed | Took: %.1f s\n", nowI, processHeightStr, time.Since(gotShareTime).Seconds())
+					}()
 				}()
 			}
 		}
