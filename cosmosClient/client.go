@@ -18,6 +18,7 @@ import (
 	"google.golang.org/grpc"
 	"log"
 	"strings"
+	"time"
 )
 
 type CosmosClient struct {
@@ -177,6 +178,20 @@ func (c *CosmosClient) BroadcastTx(msg cosmostypes.Msg) (*cosmostypes.TxResponse
 	}
 
 	return resp.TxResponse, c.handleBroadcastResult(resp.TxResponse, err)
+}
+
+func (c *CosmosClient) WaitForTx(hash string, rate time.Duration) (*tx.GetTxResponse, error) {
+	for {
+		resp, err := c.txClient.GetTx(context.Background(), &tx.GetTxRequest{Hash: hash})
+		if err != nil {
+			if strings.Contains(err.Error(), "not found") {
+				time.Sleep(rate)
+				continue
+			}
+			return nil, err
+		}
+		return resp, err
+	}
 }
 
 func (c *CosmosClient) signTxMsg(msg cosmostypes.Msg) ([]byte, error) {
