@@ -139,13 +139,14 @@ func main() {
 			if err != nil {
 				log.Fatal("Error activating account: ", accAddr.String(), ": ", err)
 			}
-			
+
 			_, err = masterCosmosClient.CosmosClient.WaitForTx(resp.TxHash, 2*time.Second)
 			if err != nil {
 				log.Fatal("Error activating account: ", accAddr.String(), ": ", err)
 			}
 
-			log.Println("Successfully activate account: ", accAddr.String(), "\n", resp)
+			log.Println("Successfully activate account: ", accAddr.String())
+			
 			_eachClient, err := cosmosClient.NewCosmosClient(
 				fmt.Sprintf("%s:%s", gRPCIP, gRPCPort),
 				eachPKey,
