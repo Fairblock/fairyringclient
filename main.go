@@ -160,6 +160,12 @@ func main() {
 			log.Fatal("Error creating share api client:", err)
 		}
 
+		bal, err := eachClient.GetBalance("frt")
+		if err != nil {
+			log.Fatal("Error getting", eachClient.GetAddress(), "account balance: ", err)
+		}
+		log.Printf("Address: %s , Balance: %s FRT\n", eachClient.GetAddress(), bal.String())
+
 		validatorCosmosClients[index] = ValidatorClients{
 			CosmosClient:   eachClient,
 			ShareApiClient: shareClient,
