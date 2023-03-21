@@ -55,6 +55,7 @@ type ValidatorClients struct {
 func main() {
 	var masterCosmosClient ValidatorClients
 	var validatorCosmosClients []ValidatorClients
+	var masterPublicKey string
 
 	// get all the variables from .env file
 	err := godotenv.Load()
@@ -108,6 +109,23 @@ func main() {
 			CosmosClient:   masterClient,
 			ShareApiClient: shareClient,
 		}
+
+		pks := make([]string, TotalValidatorNum)
+		var i uint64
+		for i = 0; i < TotalValidatorNum; i++ {
+			pk, err := readPemFile(fmt.Sprintf("%s%d%s", os.Getenv("PUB_KEY_FILE_NAME_PREFIX"), i+1, PubKeyFileNameFormat))
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			pks[i] = pk
+		}
+
+		_masterPublicKey, err := setupShareClient(*masterCosmosClient.ShareApiClient, pks, TotalValidatorNum)
+		if err != nil {
+			log.Fatal(err)
+		}
+		masterPublicKey = _masterPublicKey
 	}
 
 	allPrivateKeys, err := readPrivateKeysJsonFile("privateKeys.json")
@@ -203,26 +221,7 @@ func main() {
 		allAccAddrs[index] = eachClient.GetAccAddress()
 	}
 
-	var masterPublicKey string
-
-	if isManager {
-		pks := make([]string, TotalValidatorNum)
-		var i uint64
-		for i = 0; i < TotalValidatorNum; i++ {
-			pk, err := readPemFile(fmt.Sprintf("%s%d%s", os.Getenv("PUB_KEY_FILE_NAME_PREFIX"), i+1, PubKeyFileNameFormat))
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			pks[i] = pk
-		}
-
-		_masterPublicKey, err := setupShareClient(*masterCosmosClient.ShareApiClient, pks, TotalValidatorNum)
-		if err != nil {
-			log.Fatal(err)
-		}
-		masterPublicKey = _masterPublicKey
-	} else {
+	if !isManager {
 		_masterPublicKey, err := validatorCosmosClients[0].ShareApiClient.GetMasterPublicKey()
 
 		if err != nil {
