@@ -21,9 +21,15 @@ import (
 	"time"
 )
 
+const (
+	defaultGasAdjustment = 1.0
+	defaultGasLimit      = 300000
+)
+
 type CosmosClient struct {
 	authClient      authtypes.QueryClient
 	txClient        tx.ServiceClient
+	grpcConn        grpc.ClientConn
 	bankQueryClient banktypes.QueryClient
 	privateKey      secp256k1.PrivKey
 	publicKey       cryptotypes.PubKey
@@ -92,6 +98,7 @@ func NewCosmosClient(
 		bankQueryClient: bankClient,
 		authClient:      authClient,
 		txClient:        tx.NewServiceClient(grpcConn),
+		grpcConn:        *grpcConn,
 		privateKey:      privateKey,
 		account:         baseAccount,
 		accAddress:      accAddr,
@@ -204,7 +211,21 @@ func (c *CosmosClient) signTxMsg(msg cosmostypes.Msg) ([]byte, error) {
 		return nil, err
 	}
 
-	txBuilder.SetGasLimit(300000)
+	txf := clienttx.Factory{}.
+		WithGas(defaultGasLimit).
+		WithSignMode(signMode).
+		WithTxConfig(encodingCfg.TxConfig).
+		WithChainID(c.chainID).
+		WithAccountNumber(c.account.AccountNumber).
+		WithSequence(c.account.Sequence).
+		WithGasAdjustment(defaultGasAdjustment)
+
+	_, newGasLimit, err := clienttx.CalculateGas(&c.grpcConn, txf, msg)
+	if err != nil {
+		return nil, err
+	}
+
+	txBuilder.SetGasLimit(newGasLimit)
 
 	signerData := authsigning.SignerData{
 		ChainID:       c.chainID,

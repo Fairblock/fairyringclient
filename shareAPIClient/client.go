@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	bls "github.com/drand/kyber-bls12381"
 	"github.com/tendermint/tendermint/libs/json"
 	"github.com/tendermint/tendermint/types/time"
@@ -234,7 +235,7 @@ func (s ShareAPIClient) Setup(n, t uint64, pkList []string) (*PublicVals, error)
 	}
 
 	if parsedResp.Body == "" {
-		return nil, errors.New("error setting up")
+		return nil, errors.New(fmt.Sprintf("error setting up, setup response: %s", string(res)))
 	}
 
 	var pubVals PublicVals
