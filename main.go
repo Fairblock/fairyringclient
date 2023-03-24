@@ -33,6 +33,7 @@ var (
 
 const PubKeyFileNameFormat = ".pem"
 const PrivateKeyFileNameFormat = ".pem"
+const DENOM = "token"
 
 func setupShareClient(shareClient shareAPIClient.ShareAPIClient, pks []string, totalValidatorNum uint64) (string, error) {
 	threshold := uint64(math.Ceil(float64(totalValidatorNum) * (2.0 / 3.0)))
@@ -95,11 +96,21 @@ func main() {
 		}
 
 		addr := masterClient.GetAddress()
-		bal, err := masterClient.GetBalance("frt")
+		bal, err := masterClient.GetBalance(DENOM)
 		if err != nil {
 			log.Fatal("Error getting master account balance: ", err)
 		}
-		log.Printf("Master Cosmos Client Loaded Address: %s , Balance: %s FRT\n", addr, bal.String())
+		log.Printf("Master Cosmos Client Loaded Address: %s , Balance: %s %s\n", addr, bal.String(), DENOM)
+
+		_, err = masterClient.BroadcastTx(&types.MsgRegisterValidator{
+			Creator: addr,
+		}, true)
+		if err != nil {
+			if !strings.Contains(err.Error(), "validator already registered") {
+				log.Fatal(err)
+			}
+		}
+		log.Printf("Master. %s Registered as Validator", addr)
 
 		shareClient, err := shareAPIClient.NewShareAPIClient(ApiUrl, os.Getenv("MANAGER_PRIVATE_KEY"))
 		if err != nil {
@@ -157,7 +168,7 @@ func main() {
 			if err != nil {
 				log.Fatal("Error extract address from private key: ", err)
 			}
-			resp, err := masterCosmosClient.CosmosClient.SendToken(accAddr.String(), "frt", cosmosmath.NewInt(10))
+			resp, err := masterCosmosClient.CosmosClient.SendToken(accAddr.String(), DENOM, cosmosmath.NewInt(10), true)
 			if err != nil {
 				log.Fatal("Error activating account: ", accAddr.String(), ": ", err)
 			}
@@ -205,11 +216,11 @@ func main() {
 		}
 		log.Printf("Got share: %s | Index: %d", share, shareIndex)
 
-		bal, err := eachClient.GetBalance("frt")
+		bal, err := eachClient.GetBalance(DENOM)
 		if err != nil {
 			log.Fatal("Error getting", eachClient.GetAddress(), "account balance: ", err)
 		}
-		log.Printf("Address: %s , Balance: %s FRT\n", eachClient.GetAddress(), bal.String())
+		log.Printf("Address: %s , Balance: %s %s\n", eachClient.GetAddress(), bal.String(), DENOM)
 
 		validatorCosmosClients[index] = ValidatorClients{
 			CosmosClient:   eachClient,
@@ -247,7 +258,7 @@ func main() {
 		eachAddr := eachClient.CosmosClient.GetAddress()
 		_, err = eachClient.CosmosClient.BroadcastTx(&types.MsgRegisterValidator{
 			Creator: eachAddr,
-		})
+		}, true)
 		if err != nil {
 			if !strings.Contains(err.Error(), "validator already registered") {
 				log.Fatal(err)
@@ -279,6 +290,7 @@ func main() {
 				Creator:   masterCosmosClient.CosmosClient.GetAddress(),
 				PublicKey: publicKeyInHex,
 			},
+			true,
 		)
 		if err != nil {
 			log.Fatal(err)
@@ -319,18 +331,27 @@ func main() {
 					}
 
 					go func() {
-						_, err = nowEach.CosmosClient.BroadcastTx(&types.MsgSendKeyshare{
+						resp, err := nowEach.CosmosClient.BroadcastTx(&types.MsgSendKeyshare{
 							Creator:       nowEach.CosmosClient.GetAddress(),
 							Message:       extractedKeyHex,
 							Commitment:    hex.EncodeToString(commitmentBinary),
 							KeyShareIndex: index,
 							BlockHeight:   processHeight,
-						})
+						}, true)
 						if err != nil {
 							log.Printf("[%d] Submit KeyShare for Height %s ERROR: %s\n", nowI, processHeightStr, err.Error())
 						}
-
+						txResp, err := nowEach.CosmosClient.WaitForTx(resp.TxHash, time.Second)
+						if err != nil {
+							log.Printf("[%d] KeyShare for Height %s Failed: %s\n", nowI, processHeightStr, err.Error())
+							return
+						}
+						if txResp.TxResponse.Code != 0 {
+							log.Printf("[%d] KeyShare for Height %s Failed: %s\n", nowI, processHeightStr, txResp.TxResponse.RawLog)
+							return
+						}
 						log.Printf("[%d] Submit KeyShare for Height %s Confirmed\n", nowI, processHeightStr)
+
 					}()
 				}()
 			}

@@ -121,16 +121,16 @@ func (c *CosmosClient) GetBalance(denom string) (*math.Int, error) {
 	return &resp.Balance.Amount, nil
 }
 
-func (c *CosmosClient) SendToken(target, denom string, amount math.Int) (*cosmostypes.TxResponse, error) {
+func (c *CosmosClient) SendToken(target, denom string, amount math.Int, adjustGas bool) (*cosmostypes.TxResponse, error) {
 	resp, err := c.BroadcastTx(&banktypes.MsgSend{
 		FromAddress: c.GetAddress(),
 		ToAddress:   target,
 		Amount:      cosmostypes.NewCoins(cosmostypes.NewCoin(denom, amount)),
-	})
+	}, adjustGas)
 	return resp, err
 }
 
-func (c *CosmosClient) MultiSend(denom string, totalAmount, eachAmt math.Int, targets []cosmostypes.AccAddress) (*cosmostypes.TxResponse, error) {
+func (c *CosmosClient) MultiSend(denom string, totalAmount, eachAmt math.Int, targets []cosmostypes.AccAddress, adjustGas bool) (*cosmostypes.TxResponse, error) {
 	outputs := make([]banktypes.Output, len(targets))
 	for i, each := range targets {
 		outputs[i] = banktypes.NewOutput(each, cosmostypes.NewCoins(cosmostypes.NewCoin(denom, eachAmt)))
@@ -138,7 +138,7 @@ func (c *CosmosClient) MultiSend(denom string, totalAmount, eachAmt math.Int, ta
 	resp, err := c.BroadcastTx(&banktypes.MsgMultiSend{
 		Inputs:  []banktypes.Input{banktypes.NewInput(c.accAddress, cosmostypes.NewCoins(cosmostypes.NewCoin(denom, totalAmount)))},
 		Outputs: outputs,
-	})
+	}, adjustGas)
 
 	return resp, err
 }
@@ -165,8 +165,8 @@ func (c *CosmosClient) handleBroadcastResult(resp *cosmostypes.TxResponse, err e
 	return nil
 }
 
-func (c *CosmosClient) BroadcastTx(msg cosmostypes.Msg) (*cosmostypes.TxResponse, error) {
-	txBytes, err := c.signTxMsg(msg)
+func (c *CosmosClient) BroadcastTx(msg cosmostypes.Msg, adjustGas bool) (*cosmostypes.TxResponse, error) {
+	txBytes, err := c.signTxMsg(msg, adjustGas)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +201,7 @@ func (c *CosmosClient) WaitForTx(hash string, rate time.Duration) (*tx.GetTxResp
 	}
 }
 
-func (c *CosmosClient) signTxMsg(msg cosmostypes.Msg) ([]byte, error) {
+func (c *CosmosClient) signTxMsg(msg cosmostypes.Msg, adjustGas bool) ([]byte, error) {
 	encodingCfg := app.MakeEncodingConfig()
 	txBuilder := encodingCfg.TxConfig.NewTxBuilder()
 	signMode := encodingCfg.TxConfig.SignModeHandler().DefaultMode()
@@ -211,18 +211,21 @@ func (c *CosmosClient) signTxMsg(msg cosmostypes.Msg) ([]byte, error) {
 		return nil, err
 	}
 
-	txf := clienttx.Factory{}.
-		WithGas(defaultGasLimit).
-		WithSignMode(signMode).
-		WithTxConfig(encodingCfg.TxConfig).
-		WithChainID(c.chainID).
-		WithAccountNumber(c.account.AccountNumber).
-		WithSequence(c.account.Sequence).
-		WithGasAdjustment(defaultGasAdjustment)
+	var newGasLimit uint64 = defaultGasLimit
+	if adjustGas {
+		txf := clienttx.Factory{}.
+			WithGas(defaultGasLimit).
+			WithSignMode(signMode).
+			WithTxConfig(encodingCfg.TxConfig).
+			WithChainID(c.chainID).
+			WithAccountNumber(c.account.AccountNumber).
+			WithSequence(c.account.Sequence).
+			WithGasAdjustment(defaultGasAdjustment)
 
-	_, newGasLimit, err := clienttx.CalculateGas(&c.grpcConn, txf, msg)
-	if err != nil {
-		return nil, err
+		_, newGasLimit, err = clienttx.CalculateGas(&c.grpcConn, txf, msg)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	txBuilder.SetGasLimit(newGasLimit)
