@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	defaultGasAdjustment = 1.0
+	defaultGasAdjustment = 1.5
 	defaultGasLimit      = 300000
 )
 

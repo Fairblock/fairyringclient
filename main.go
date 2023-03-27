@@ -338,7 +338,7 @@ func main() {
 							Commitment:    hex.EncodeToString(commitmentBinary),
 							KeyShareIndex: index,
 							BlockHeight:   processHeight,
-						}, false)
+						}, true)
 						if err != nil {
 							log.Printf("[%d] Submit KeyShare for Height %s ERROR: %s\n", nowI, processHeightStr, err.Error())
 						}
