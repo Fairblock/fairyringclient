@@ -33,7 +33,7 @@ var (
 
 const PubKeyFileNameFormat = ".pem"
 const PrivateKeyFileNameFormat = ".pem"
-const DENOM = "token"
+const DENOM = "frt"
 
 func setupShareClient(shareClient shareAPIClient.ShareAPIClient, pks []string, totalValidatorNum uint64) (string, error) {
 	threshold := uint64(math.Ceil(float64(totalValidatorNum) * (2.0 / 3.0)))
@@ -120,23 +120,24 @@ func main() {
 			CosmosClient:   masterClient,
 			ShareApiClient: shareClient,
 		}
+		if isManager {
+			pks := make([]string, TotalValidatorNum)
+			var i uint64
+			for i = 0; i < TotalValidatorNum; i++ {
+				pk, err := readPemFile(fmt.Sprintf("%s%d%s", os.Getenv("PUB_KEY_FILE_NAME_PREFIX"), i+1, PubKeyFileNameFormat))
+				if err != nil {
+					log.Fatal(err)
+				}
 
-		pks := make([]string, TotalValidatorNum)
-		var i uint64
-		for i = 0; i < TotalValidatorNum; i++ {
-			pk, err := readPemFile(fmt.Sprintf("%s%d%s", os.Getenv("PUB_KEY_FILE_NAME_PREFIX"), i+1, PubKeyFileNameFormat))
+				pks[i] = pk
+			}
+
+			_masterPublicKey, err := setupShareClient(*masterCosmosClient.ShareApiClient, pks, TotalValidatorNum)
 			if err != nil {
 				log.Fatal(err)
 			}
-
-			pks[i] = pk
+			masterPublicKey = _masterPublicKey
 		}
-
-		_masterPublicKey, err := setupShareClient(*masterCosmosClient.ShareApiClient, pks, TotalValidatorNum)
-		if err != nil {
-			log.Fatal(err)
-		}
-		masterPublicKey = _masterPublicKey
 	}
 
 	allPrivateKeys, err := readPrivateKeysJsonFile("privateKeys.json")
@@ -337,7 +338,7 @@ func main() {
 							Commitment:    hex.EncodeToString(commitmentBinary),
 							KeyShareIndex: index,
 							BlockHeight:   processHeight,
-						}, true)
+						}, false)
 						if err != nil {
 							log.Printf("[%d] Submit KeyShare for Height %s ERROR: %s\n", nowI, processHeightStr, err.Error())
 						}
