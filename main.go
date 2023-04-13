@@ -102,16 +102,6 @@ func main() {
 		}
 		log.Printf("Master Cosmos Client Loaded Address: %s , Balance: %s %s\n", addr, bal.String(), DENOM)
 
-		_, err = masterClient.BroadcastTx(&types.MsgRegisterValidator{
-			Creator: addr,
-		}, true)
-		if err != nil {
-			if !strings.Contains(err.Error(), "validator already registered") {
-				log.Fatal(err)
-			}
-		}
-		log.Printf("Master. %s Registered as Validator", addr)
-
 		shareClient, err := shareAPIClient.NewShareAPIClient(ApiUrl, os.Getenv("MANAGER_PRIVATE_KEY"))
 		if err != nil {
 			log.Fatal("Error creating share api client:", err)
