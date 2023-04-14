@@ -49,13 +49,11 @@ NODE_PORT=your_node_port
 GRPC_IP_ADDRESS=your_node_address
 GRPC_PORT=9090
 
-TOTAL_VALIDATOR_NUM=update_to_the_total_validator_num
+# Only update this if your private key file index is not start from 1
+PRIVATE_KEY_FILE_NAME_INDEX_START_AT=1
 
-# Update this to false
-IS_MANAGER=false
-
-# Leave this empty
-MASTER_PRIVATE_KEY=
+# Only update this if the default token denom is not FRT
+DENOM=frt
 ```
 
 ### Prepare account for submitting keyshare to fairyring chain
@@ -97,6 +95,9 @@ NODE_PORT=change_to_your_node_port
 
 # Update to a correct total validator number for manager to setup correctly
 TOTAL_VALIDATOR_NUM=
+
+# Update IS_MANAGER to true
+IS_MANAGER=true
 
 MASTER_PRIVATE_KEY=
 ```

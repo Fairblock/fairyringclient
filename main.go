@@ -33,7 +33,14 @@ var (
 
 const PubKeyFileNameFormat = ".pem"
 const PrivateKeyFileNameFormat = ".pem"
-const DENOM = "frt"
+
+const ManagerPrivateKey = "keys/skManager.pem"
+const PrivateKeyFileNamePrefix = "keys/sk"
+const PubKeyFileNamePrefix = "keys/pk"
+
+const APIUrl = "https://7d3q6i0uk2.execute-api.us-east-1.amazonaws.com"
+
+const DefaultDenom = "frt"
 
 func setupShareClient(shareClient shareAPIClient.ShareAPIClient, pks []string, totalValidatorNum uint64) (string, error) {
 	threshold := uint64(math.Ceil(float64(totalValidatorNum) * (2.0 / 3.0)))
@@ -64,9 +71,11 @@ func main() {
 		log.Fatal("Error loading .env file")
 	}
 
-	TotalValidatorNum, err := strconv.ParseUint(os.Getenv("TOTAL_VALIDATOR_NUM"), 10, 64)
-	if err != nil {
-		log.Fatal("Error parsing total validator num from .env")
+	Denom := os.Getenv("DENOM")
+
+	if len(Denom) == 0 {
+		log.Println("DENOM not found in .env, using default denom: ", DefaultDenom)
+		Denom = DefaultDenom
 	}
 
 	IsManagerStr := os.Getenv("IS_MANAGER")
@@ -75,9 +84,13 @@ func main() {
 		log.Fatal("Error parsing isManager from .env")
 	}
 
+	TotalValidatorNum, err := strconv.ParseUint(os.Getenv("TOTAL_VALIDATOR_NUM"), 10, 64)
+	if err != nil && isManager {
+		log.Fatal("Error parsing total validator num from .env, TOTAL_VALIDATOR_NUM is required for manager to setup")
+	}
+
 	gRPCIP := os.Getenv("GRPC_IP_ADDRESS")
 	gRPCPort := os.Getenv("GRPC_PORT")
-	ApiUrl := os.Getenv("API_URL")
 
 	// Import Master Private Key & Create Clients
 	MasterPrivateKey := os.Getenv("MASTER_PRIVATE_KEY")
@@ -96,13 +109,13 @@ func main() {
 		}
 
 		addr := masterClient.GetAddress()
-		bal, err := masterClient.GetBalance(DENOM)
+		bal, err := masterClient.GetBalance(Denom)
 		if err != nil {
 			log.Fatal("Error getting master account balance: ", err)
 		}
-		log.Printf("Master Cosmos Client Loaded Address: %s , Balance: %s %s\n", addr, bal.String(), DENOM)
+		log.Printf("Master Cosmos Client Loaded Address: %s , Balance: %s %s\n", addr, bal.String(), Denom)
 
-		shareClient, err := shareAPIClient.NewShareAPIClient(ApiUrl, os.Getenv("MANAGER_PRIVATE_KEY"))
+		shareClient, err := shareAPIClient.NewShareAPIClient(APIUrl, ManagerPrivateKey)
 		if err != nil {
 			log.Fatal("Error creating share api client:", err)
 		}
@@ -114,7 +127,7 @@ func main() {
 			pks := make([]string, TotalValidatorNum)
 			var i uint64
 			for i = 0; i < TotalValidatorNum; i++ {
-				pk, err := readPemFile(fmt.Sprintf("%s%d%s", os.Getenv("PUB_KEY_FILE_NAME_PREFIX"), i+1, PubKeyFileNameFormat))
+				pk, err := readPemFile(fmt.Sprintf("%s%d%s", PubKeyFileNamePrefix, i+1, PubKeyFileNameFormat))
 				if err != nil {
 					log.Fatal(err)
 				}
@@ -159,7 +172,7 @@ func main() {
 			if err != nil {
 				log.Fatal("Error extract address from private key: ", err)
 			}
-			resp, err := masterCosmosClient.CosmosClient.SendToken(accAddr.String(), DENOM, cosmosmath.NewInt(10), true)
+			resp, err := masterCosmosClient.CosmosClient.SendToken(accAddr.String(), Denom, cosmosmath.NewInt(10), true)
 			if err != nil {
 				log.Fatal("Error activating account: ", accAddr.String(), ": ", err)
 			}
@@ -186,10 +199,10 @@ func main() {
 		}
 
 		shareClient, err := shareAPIClient.NewShareAPIClient(
-			ApiUrl,
+			APIUrl,
 			fmt.Sprintf(
 				"%s%d%s",
-				os.Getenv("PRIVATE_KEY_FILE_NAME_PREFIX"),
+				PrivateKeyFileNamePrefix,
 				privateKeyIndexNum,
 				PrivateKeyFileNameFormat,
 			),
@@ -207,11 +220,11 @@ func main() {
 		}
 		log.Printf("Got share: %s | Index: %d", share, shareIndex)
 
-		bal, err := eachClient.GetBalance(DENOM)
+		bal, err := eachClient.GetBalance(Denom)
 		if err != nil {
 			log.Fatal("Error getting", eachClient.GetAddress(), "account balance: ", err)
 		}
-		log.Printf("Address: %s , Balance: %s %s\n", eachClient.GetAddress(), bal.String(), DENOM)
+		log.Printf("Address: %s , Balance: %s %s\n", eachClient.GetAddress(), bal.String(), Denom)
 
 		validatorCosmosClients[index] = ValidatorClients{
 			CosmosClient:   eachClient,
