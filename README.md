@@ -54,6 +54,9 @@ PRIVATE_KEY_FILE_NAME_INDEX_START_AT=1
 
 # Only update this if the default token denom is not FRT
 DENOM=frt
+
+# Put your private key here, separate with comma
+VALIDATOR_PRIVATE_KEYS=private_key_1,private_key2,private_key3
 ```
 
 ### Prepare account for submitting keyshare to fairyring chain
@@ -62,9 +65,9 @@ The script `generate_keys.sh` will generate private key(s) for you, you can you 
 
 Make sure the account you are using already activated and have enough balance for sending transaction
 
-Then, replace the private key in `privateKeys.json` to yours. If you are using your own account.
+Then, put your private key in `VALIDATOR_PRIVATE_KEYS` in `.env`. If you are using your own account.
 
-Make sure you have te same number of public keys & private keys in the `keys` directory and the number of private keys in `privateKeys.json`
+Make sure you have te same number of public keys & private keys in the `keys` directory and the number of private keys in `VALIDATOR_PRIVATE_KEYS`
 
 ## Setting up the client for local testnet
 
@@ -108,7 +111,7 @@ For the master private key, if you are running fairyring with the recommended co
 
 You will also need to update the `DENOM` in `main.go line 36` to `token`
 
-What the master private key does, is it will load the account and send some tokens from the master to all the accounts in `privateKeys.json`
+What the master private key does, is it will load the account and send some tokens from the master to all the accounts in `VALIDATOR_PRIVATE_KEYS`
 
 ## Start the client
 
@@ -118,4 +121,6 @@ Then run the client by the following command:
 go run main.go
 ```
 
-The client will look for `privateKeys.json`, and will automatically run the number of private key in the privateKeys.json client to submit keyshares.
+The client will look for `VALIDATOR_PRIVATE_KEYS` in `.env`, and will automatically run the same number of client to submit keyshares.
+
+<small>* Separate your private keys with comma.</small>
