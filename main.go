@@ -6,7 +6,6 @@ import (
 	cosmosmath "cosmossdk.io/math"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"fairyring/x/fairyring/types"
 	"fairyringclient/cosmosClient"
 	"fairyringclient/shareAPIClient"
@@ -14,7 +13,6 @@ import (
 	cosmostypes "github.com/cosmos/cosmos-sdk/types"
 	bls "github.com/drand/kyber-bls12381"
 	"github.com/joho/godotenv"
-	"io"
 	"log"
 	"math"
 	"os"
@@ -143,9 +141,9 @@ func main() {
 		}
 	}
 
-	allPrivateKeys, err := readPrivateKeysJsonFile("privateKeys.json")
-	if err != nil {
-		log.Fatal("Error loading private keys json: ", err)
+	allPrivateKeys := strings.Split(os.Getenv("VALIDATOR_PRIVATE_KEYS"), ",")
+	if len(allPrivateKeys) == 0 {
+		log.Fatal("VALIDATOR_PRIVATE_KEYS not found")
 	}
 
 	validatorCosmosClients = make([]ValidatorClients, len(allPrivateKeys))
@@ -384,29 +382,6 @@ func readPemFile(filePath string) (string, error) {
 	}
 
 	return string(pemBytes), nil
-}
-
-func readPrivateKeysJsonFile(filePath string) ([]string, error) {
-	jsonFile, err := os.Open(filePath)
-	if err != nil {
-		return nil, err
-	}
-
-	defer jsonFile.Close()
-
-	var keys []string
-
-	byteValue, err := io.ReadAll(jsonFile)
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal(byteValue, &keys)
-	if err != nil {
-		return nil, err
-	}
-
-	return keys, nil
 }
 
 func getNowStr() string {

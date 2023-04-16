@@ -21,4 +21,4 @@ do
   privateKeysArray+=($pKey)
 done
 
-printf '%s\n' "${privateKeysArray[@]}" | jq -R . | jq -s . > privateKeys.json
+sed -i .old -e "s/VALIDATOR_PRIVATE_KEYS=/VALIDATOR_PRIVATE_KEYS=$(IFS=, ; echo "${privateKeysArray[*]}")/g" .env
