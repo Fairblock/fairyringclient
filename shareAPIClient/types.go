@@ -36,6 +36,8 @@ type SetupParam struct {
 	T         string `json:"t"`
 	Msg       string `json:"msg"`
 	SignedMsg string `json:"signedMsg"`
+	Endpoint  string `json:"endpoint"`
+	ChainID   string `json:"chainID"`
 }
 
 type GetShareRespBody struct {
@@ -47,6 +49,12 @@ type GetShareRespBody struct {
 type PublicVals struct {
 	Commits []string `json:"Commits"`
 	MPK     string   `json:"MPK"`
+}
+
+type SetupResult struct {
+	Commits []string `json:"Commits"`
+	MPK     string   `json:"MPK"`
+	TxHash  string   `json:"txHash"`
 }
 
 type Response struct {

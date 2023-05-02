@@ -197,7 +197,11 @@ func (s ShareAPIClient) GetMasterPublicKey() (string, error) {
 	return pubVals.MPK, nil
 }
 
-func (s ShareAPIClient) Setup(n, t uint64, pkList []string) (*PublicVals, error) {
+func (s ShareAPIClient) Setup(
+	chainID, endpoint string,
+	n, t uint64,
+	pkList []string,
+) (*SetupResult, error) {
 	msg := strconv.FormatInt(time.Now().Unix(), 10)
 	signed, err := s.signMessage([]byte(msg))
 	if err != nil {
@@ -211,6 +215,8 @@ func (s ShareAPIClient) Setup(n, t uint64, pkList []string) (*PublicVals, error)
 			N:         strconv.FormatUint(n, 10),
 			T:         strconv.FormatUint(t, 10),
 			Msg:       msg,
+			ChainID:   chainID,
+			Endpoint:  endpoint,
 			SignedMsg: signed,
 		},
 		MultiValueQueryStringParameters: SetupMultiValParam{
@@ -238,11 +244,11 @@ func (s ShareAPIClient) Setup(n, t uint64, pkList []string) (*PublicVals, error)
 		return nil, errors.New(fmt.Sprintf("error setting up, setup response: %s", string(res)))
 	}
 
-	var pubVals PublicVals
-	err = json.Unmarshal([]byte(parsedResp.Body), &pubVals)
+	var setupResult SetupResult
+	err = json.Unmarshal([]byte(parsedResp.Body), &setupResult)
 	if err != nil {
 		return nil, err
 	}
 
-	return &pubVals, nil
+	return &setupResult, nil
 }

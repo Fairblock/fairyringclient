@@ -39,15 +39,22 @@ const PubKeyFileNamePrefix = "keys/pk"
 const APIUrl = "https://7d3q6i0uk2.execute-api.us-east-1.amazonaws.com"
 
 const DefaultDenom = "frt"
+const DefaultChainID = "fairyring"
 
-func setupShareClient(shareClient shareAPIClient.ShareAPIClient, pks []string, totalValidatorNum uint64) (string, error) {
+func setupShareClient(
+	shareClient shareAPIClient.ShareAPIClient,
+	endpoint string,
+	chainID string,
+	pks []string,
+	totalValidatorNum uint64,
+) (string, error) {
 	threshold := uint64(math.Ceil(float64(totalValidatorNum) * (2.0 / 3.0)))
 
-	result, err := shareClient.Setup(totalValidatorNum, threshold, pks)
+	result, err := shareClient.Setup(chainID, endpoint, totalValidatorNum, threshold, pks)
 	if err != nil {
 		return "", err
 	}
-
+	log.Printf("Tx Hash: %s\n, Resp: %v\n", result.TxHash, result)
 	return result.MPK, nil
 }
 
@@ -89,18 +96,19 @@ func main() {
 
 	gRPCIP := os.Getenv("GRPC_IP_ADDRESS")
 	gRPCPort := os.Getenv("GRPC_PORT")
+	gRPCEndpoint := fmt.Sprintf(
+		"%s:%s",
+		gRPCIP,
+		gRPCPort,
+	)
 
 	// Import Master Private Key & Create Clients
 	MasterPrivateKey := os.Getenv("MASTER_PRIVATE_KEY")
 	if len(MasterPrivateKey) > 1 {
 		masterClient, err := cosmosClient.NewCosmosClient(
-			fmt.Sprintf(
-				"%s:%s",
-				gRPCIP,
-				gRPCPort,
-			),
+			gRPCEndpoint,
 			MasterPrivateKey,
-			"fairyring",
+			DefaultChainID,
 		)
 		if err != nil {
 			log.Fatal("Error creating custom cosmos client: ", err)
@@ -133,7 +141,7 @@ func main() {
 				pks[i] = pk
 			}
 
-			_masterPublicKey, err := setupShareClient(*masterCosmosClient.ShareApiClient, pks, TotalValidatorNum)
+			_masterPublicKey, err := setupShareClient(*masterCosmosClient.ShareApiClient, gRPCEndpoint, DefaultChainID, pks, TotalValidatorNum)
 			if err != nil {
 				log.Fatal(err)
 			}
