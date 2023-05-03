@@ -94,8 +94,10 @@ func main() {
 		log.Fatal("Error parsing total validator num from .env, TOTAL_VALIDATOR_NUM is required for manager to setup")
 	}
 
+	setupGRPCIP := os.Getenv("SETUP_GRPC_IP_ADDRESS")
 	gRPCIP := os.Getenv("GRPC_IP_ADDRESS")
 	gRPCPort := os.Getenv("GRPC_PORT")
+	setupGRpcEndpoint := fmt.Sprintf("%s:%s", setupGRPCIP, gRPCPort)
 	gRPCEndpoint := fmt.Sprintf(
 		"%s:%s",
 		gRPCIP,
@@ -141,7 +143,13 @@ func main() {
 				pks[i] = pk
 			}
 
-			_masterPublicKey, err := setupShareClient(*masterCosmosClient.ShareApiClient, gRPCEndpoint, DefaultChainID, pks, TotalValidatorNum)
+			_masterPublicKey, err := setupShareClient(
+				*masterCosmosClient.ShareApiClient,
+				setupGRpcEndpoint,
+				DefaultChainID,
+				pks,
+				TotalValidatorNum,
+			)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -169,9 +177,9 @@ func main() {
 
 	for index, eachPKey := range allPrivateKeys {
 		eachClient, err := cosmosClient.NewCosmosClient(
-			fmt.Sprintf("%s:%s", gRPCIP, gRPCPort),
+			gRPCEndpoint,
 			eachPKey,
-			"fairyring",
+			DefaultChainID,
 		)
 		if err != nil {
 			accAddr, err := cosmosClient.PrivateKeyToAccAddress(eachPKey)
@@ -191,9 +199,9 @@ func main() {
 			log.Println("Successfully activate account: ", accAddr.String())
 
 			_eachClient, err := cosmosClient.NewCosmosClient(
-				fmt.Sprintf("%s:%s", gRPCIP, gRPCPort),
+				gRPCEndpoint,
 				eachPKey,
-				"fairyring",
+				DefaultChainID,
 			)
 			if err != nil {
 				log.Fatal("Error creating custom cosmos client: ", err)
@@ -293,20 +301,7 @@ func main() {
 	}
 	publicKeyInHex := hex.EncodeToString(decodedPublicKey)
 
-	// Submit the pubkey & id to fairyring
-	if isManager {
-		_, err := masterCosmosClient.CosmosClient.BroadcastTx(
-			&types.MsgCreateLatestPubKey{
-				Creator:   masterCosmosClient.CosmosClient.GetAddress(),
-				PublicKey: publicKeyInHex,
-			},
-			true,
-		)
-		if err != nil {
-			log.Fatal(err)
-		}
-		log.Println("Manager Submitted latest public key")
-	}
+	log.Printf("Latest Pub Key: %s\n", publicKeyInHex)
 
 	for {
 		select {
