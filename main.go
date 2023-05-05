@@ -58,11 +58,17 @@ func setupShareClient(
 	return result.MPK, nil
 }
 
+type KeyShare struct {
+	Share distIBE.Share
+	Index uint64
+}
+
 type ValidatorClients struct {
-	CosmosClient   *cosmosClient.CosmosClient
-	ShareApiClient *shareAPIClient.ShareAPIClient
-	Share          distIBE.Share
-	Index          uint64
+	CosmosClient            *cosmosClient.CosmosClient
+	ShareApiClient          *shareAPIClient.ShareAPIClient
+	CurrentShare            *KeyShare
+	PendingShare            *KeyShare
+	CurrentShareExpiryBlock uint64
 }
 
 func main() {
@@ -243,8 +249,10 @@ func main() {
 		validatorCosmosClients[index] = ValidatorClients{
 			CosmosClient:   eachClient,
 			ShareApiClient: shareClient,
-			Share:          *share,
-			Index:          shareIndex,
+			CurrentShare: &KeyShare{
+				Share: *share,
+				Index: shareIndex,
+			},
 		}
 
 		allAccAddrs[index] = eachClient.GetAccAddress()
@@ -285,7 +293,8 @@ func main() {
 		log.Printf("%d. %s Registered as Validator", i, eachAddr)
 	}
 
-	query := "tm.event = 'NewBlockHeader'"
+	query := "tm.event = 'NewBlockHeader' OR tm.event = 'Tx'"
+
 	out, err := client.Subscribe(context.Background(), "", query)
 	if err != nil {
 		log.Fatal(err)
@@ -306,7 +315,50 @@ func main() {
 	for {
 		select {
 		case result := <-out:
-			height := result.Data.(tmtypes.EventDataNewBlockHeader).Header.Height
+			newBlockHeader := result.Data.(tmtypes.EventDataNewBlockHeader)
+			if len(newBlockHeader.Header.ChainID) == 0 && newBlockHeader.Header.Height == 0 {
+				pubkey, found := result.Events["queued-pubkey-created.queued-pubkey-created-pubkey"]
+				if !found {
+					continue
+				}
+
+				expiryHeight, found := result.Events["queued-pubkey-created.queued-pubkey-created-expiry-height"]
+				if !found {
+					continue
+				}
+
+				activePubKeyExpiryHeightStr, found := result.Events["queued-pubkey-created.queued-pubkey-created-active-pubkey-expiry-height"]
+				if !found {
+					continue
+				}
+				activePubKeyExpiryHeight, err := strconv.ParseUint(activePubKeyExpiryHeightStr[0], 10, 64)
+				if err != nil {
+					log.Printf("Error parsing active pubkey expiry height: %s\n", err.Error())
+					continue
+				}
+
+				log.Printf("\nNew Pubkey found: %s | Expiry Height: %s\n", pubkey, expiryHeight)
+
+				for i, eachClient := range validatorCosmosClients {
+					nowI := i
+					nowClient := eachClient
+					go func() {
+						newShare, index, err := nowClient.ShareApiClient.GetShare(getNowStr())
+						if err != nil {
+
+						}
+						validatorCosmosClients[nowI].PendingShare = &KeyShare{
+							Share: *newShare,
+							Index: index,
+						}
+						validatorCosmosClients[nowI].CurrentShareExpiryBlock = activePubKeyExpiryHeight
+						log.Printf("\nGot [%d] Client's New Share: %v\n", nowI, newShare.Value)
+					}()
+				}
+
+				continue
+			}
+			height := newBlockHeader.Header.Height
 			fmt.Println("")
 
 			processHeight := uint64(height + 1)
@@ -318,17 +370,26 @@ func main() {
 				nowI := i
 				nowEach := each
 				go func() {
-					share := nowEach.Share
-					index := nowEach.Index
+					if nowEach.CurrentShareExpiryBlock <= processHeight {
+						log.Printf("[%d] Height: %d | Old share expiring, updatied to new share\n", nowI, processHeight)
+						if nowEach.PendingShare == nil {
+							log.Printf("Pending share not found for client no.%d\n", nowI)
+							return
+						}
 
-					extractedKey := distIBE.Extract(s, share.Value, uint32(index), []byte(processHeightStr))
+						nowEach.CurrentShare = nowEach.PendingShare
+						nowEach.PendingShare = nil
+					}
+					currentShare := nowEach.CurrentShare
+
+					extractedKey := distIBE.Extract(s, currentShare.Share.Value, uint32(currentShare.Index), []byte(processHeightStr))
 					extractedKeyBinary, err := extractedKey.Sk.MarshalBinary()
 					if err != nil {
 						log.Fatal(err)
 					}
 					extractedKeyHex := hex.EncodeToString(extractedKeyBinary)
 
-					commitmentPoint := s.G1().Point().Mul(share.Value, s.G1().Point().Base())
+					commitmentPoint := s.G1().Point().Mul(currentShare.Share.Value, s.G1().Point().Base())
 					commitmentBinary, err := commitmentPoint.MarshalBinary()
 
 					if err != nil {
@@ -340,7 +401,7 @@ func main() {
 							Creator:       nowEach.CosmosClient.GetAddress(),
 							Message:       extractedKeyHex,
 							Commitment:    hex.EncodeToString(commitmentBinary),
-							KeyShareIndex: index,
+							KeyShareIndex: currentShare.Index,
 							BlockHeight:   processHeight,
 						}, true)
 						if err != nil {
