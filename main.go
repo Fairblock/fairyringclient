@@ -293,9 +293,12 @@ func main() {
 		log.Printf("%d. %s Registered as Validator", i, eachAddr)
 	}
 
-	query := "tm.event = 'NewBlockHeader' OR tm.event = 'Tx'"
+	out, err := client.Subscribe(context.Background(), "", "tm.event = 'NewBlockHeader'")
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	out, err := client.Subscribe(context.Background(), "", query)
+	txOut, err := client.Subscribe(context.Background(), "", "tm.event = 'Tx'")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -312,12 +315,11 @@ func main() {
 
 	log.Printf("Latest Pub Key: %s\n", publicKeyInHex)
 
-	for {
-		select {
-		case result := <-out:
-			newBlockHeader := result.Data.(tmtypes.EventDataNewBlockHeader)
-			if len(newBlockHeader.Header.ChainID) == 0 && newBlockHeader.Header.Height == 0 {
-				pubkey, found := result.Events["queued-pubkey-created.queued-pubkey-created-pubkey"]
+	go func() {
+		for {
+			select {
+			case result := <-txOut:
+				pubKey, found := result.Events["queued-pubkey-created.queued-pubkey-created-pubkey"]
 				if !found {
 					continue
 				}
@@ -337,7 +339,7 @@ func main() {
 					continue
 				}
 
-				log.Printf("\nNew Pubkey found: %s | Expiry Height: %s\n", pubkey, expiryHeight)
+				log.Printf("\nNew Pubkey found: %s | Expiry Height: %s\n", pubKey, expiryHeight)
 
 				for i, eachClient := range validatorCosmosClients {
 					nowI := i
@@ -355,9 +357,15 @@ func main() {
 						log.Printf("\nGot [%d] Client's New Share: %v\n", nowI, newShare.Value)
 					}()
 				}
-
-				continue
 			}
+		}
+	}()
+
+	for {
+		select {
+		case result := <-out:
+			newBlockHeader := result.Data.(tmtypes.EventDataNewBlockHeader)
+
 			height := newBlockHeader.Header.Height
 			fmt.Println("")
 
@@ -370,7 +378,7 @@ func main() {
 				nowI := i
 				nowEach := each
 				go func() {
-					if nowEach.CurrentShareExpiryBlock <= processHeight {
+					if nowEach.CurrentShareExpiryBlock != 0 && nowEach.CurrentShareExpiryBlock <= processHeight {
 						log.Printf("[%d] Height: %d | Old share expiring, updatied to new share\n", nowI, processHeight)
 						if nowEach.PendingShare == nil {
 							log.Printf("Pending share not found for client no.%d\n", nowI)
