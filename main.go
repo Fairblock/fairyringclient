@@ -385,8 +385,8 @@ func main() {
 							return
 						}
 
-						nowEach.CurrentShare = nowEach.PendingShare
-						nowEach.PendingShare = nil
+						validatorCosmosClients[nowI].CurrentShare = nowEach.PendingShare
+						validatorCosmosClients[nowI].PendingShare = nil
 					}
 					currentShare := nowEach.CurrentShare
 
