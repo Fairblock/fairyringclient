@@ -250,5 +250,9 @@ func (s ShareAPIClient) Setup(
 		return nil, err
 	}
 
+	if len(setupResult.Error) < 1 {
+		return nil, errors.New(setupResult.Error)
+	}
+
 	return &setupResult, nil
 }

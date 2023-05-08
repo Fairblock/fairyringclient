@@ -55,6 +55,7 @@ type SetupResult struct {
 	Commits []string `json:"Commits"`
 	MPK     string   `json:"MPK"`
 	TxHash  string   `json:"txHash"`
+	Error   string   `json:"error"`
 }
 
 type Response struct {
