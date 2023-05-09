@@ -12,8 +12,8 @@ import (
 	cosmostypes "github.com/cosmos/cosmos-sdk/types"
 	bls "github.com/drand/kyber-bls12381"
 	"github.com/joho/godotenv"
+	coretypes "github.com/tendermint/tendermint/rpc/core/types"
 	"log"
-	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -40,39 +40,12 @@ const APIUrl = "https://7d3q6i0uk2.execute-api.us-east-1.amazonaws.com"
 const DefaultDenom = "frt"
 const DefaultChainID = "fairyring"
 
-func setupShareClient(
-	shareClient shareAPIClient.ShareAPIClient,
-	endpoint string,
-	chainID string,
-	pks []string,
-	totalValidatorNum uint64,
-) (string, error) {
-	threshold := uint64(math.Ceil(float64(totalValidatorNum) * (2.0 / 3.0)))
-
-	result, err := shareClient.Setup(chainID, endpoint, totalValidatorNum, threshold, pks)
-	if err != nil {
-		return "", err
-	}
-	log.Printf("Tx Hash: %s\n", result.TxHash)
-	return result.MPK, nil
-}
-
-type KeyShare struct {
-	Share distIBE.Share
-	Index uint64
-}
-
-type ValidatorClients struct {
-	CosmosClient            *cosmosClient.CosmosClient
-	ShareApiClient          *shareAPIClient.ShareAPIClient
-	CurrentShare            *KeyShare
-	PendingShare            *KeyShare
-	CurrentShareExpiryBlock uint64
-}
+var (
+	masterCosmosClient     ValidatorClients
+	validatorCosmosClients []ValidatorClients
+)
 
 func main() {
-	var masterCosmosClient ValidatorClients
-	var validatorCosmosClients []ValidatorClients
 
 	// get all the variables from .env file
 	err := godotenv.Load()
@@ -147,13 +120,16 @@ func main() {
 				pks[i] = pk
 			}
 
-			_, err = setupShareClient(
-				*masterCosmosClient.ShareApiClient,
+			txHash, err := masterCosmosClient.SetupShareClient(
 				setupGRpcEndpoint,
 				DefaultChainID,
 				pks,
 				TotalValidatorNum,
 			)
+			if err != nil {
+				log.Fatal("Error setting share client: ", err.Error())
+			}
+			log.Printf("\nSetup Tx Hash: %s\n", txHash)
 		}
 	}
 
@@ -292,51 +268,7 @@ func main() {
 
 	s := bls.NewBLS12381Suite()
 
-	go func() {
-		for {
-			select {
-			case result := <-txOut:
-				pubKey, found := result.Events["queued-pubkey-created.queued-pubkey-created-pubkey"]
-				if !found {
-					continue
-				}
-
-				expiryHeight, found := result.Events["queued-pubkey-created.queued-pubkey-created-expiry-height"]
-				if !found {
-					continue
-				}
-
-				activePubKeyExpiryHeightStr, found := result.Events["queued-pubkey-created.queued-pubkey-created-active-pubkey-expiry-height"]
-				if !found {
-					continue
-				}
-				activePubKeyExpiryHeight, err := strconv.ParseUint(activePubKeyExpiryHeightStr[0], 10, 64)
-				if err != nil {
-					log.Printf("Error parsing active pubkey expiry height: %s\n", err.Error())
-					continue
-				}
-
-				log.Printf("\nNew Pubkey found: %s | Expiry Height: %s\n", pubKey, expiryHeight)
-
-				for i, eachClient := range validatorCosmosClients {
-					nowI := i
-					nowClient := eachClient
-					go func() {
-						newShare, index, err := nowClient.ShareApiClient.GetShare(getNowStr())
-						if err != nil {
-
-						}
-						validatorCosmosClients[nowI].PendingShare = &KeyShare{
-							Share: *newShare,
-							Index: index,
-						}
-						validatorCosmosClients[nowI].CurrentShareExpiryBlock = activePubKeyExpiryHeight
-						log.Printf("\nGot [%d] Client's New Share: %v\n", nowI, newShare.Value)
-					}()
-				}
-			}
-		}
-	}()
+	go listenForNewPubKey(txOut)
 
 	for {
 		select {
@@ -362,8 +294,7 @@ func main() {
 							return
 						}
 
-						validatorCosmosClients[nowI].CurrentShare = nowEach.PendingShare
-						validatorCosmosClients[nowI].PendingShare = nil
+						validatorCosmosClients[nowI].ActivatePendingShare()
 					}
 					currentShare := nowEach.CurrentShare
 
@@ -404,6 +335,52 @@ func main() {
 						log.Printf("[%d] Submit KeyShare for Height %s Confirmed\n", nowI, processHeightStr)
 
 					}()
+				}()
+			}
+		}
+	}
+}
+
+func listenForNewPubKey(txOut <-chan coretypes.ResultEvent) {
+	for {
+		select {
+		case result := <-txOut:
+			pubKey, found := result.Events["queued-pubkey-created.queued-pubkey-created-pubkey"]
+			if !found {
+				continue
+			}
+
+			expiryHeight, found := result.Events["queued-pubkey-created.queued-pubkey-created-expiry-height"]
+			if !found {
+				continue
+			}
+
+			activePubKeyExpiryHeightStr, found := result.Events["queued-pubkey-created.queued-pubkey-created-active-pubkey-expiry-height"]
+			if !found {
+				continue
+			}
+			activePubKeyExpiryHeight, err := strconv.ParseUint(activePubKeyExpiryHeightStr[0], 10, 64)
+			if err != nil {
+				log.Printf("Error parsing active pubkey expiry height: %s\n", err.Error())
+				continue
+			}
+
+			log.Printf("\nNew Pubkey found: %s | Expiry Height: %s\n", pubKey, expiryHeight)
+
+			for i, eachClient := range validatorCosmosClients {
+				nowI := i
+				nowClient := eachClient
+				go func() {
+					newShare, index, err := nowClient.ShareApiClient.GetShare(getNowStr())
+					if err != nil {
+
+					}
+					validatorCosmosClients[nowI].SetPendingShare(&KeyShare{
+						Share: *newShare,
+						Index: index,
+					})
+					validatorCosmosClients[nowI].SetExpiryBlock(activePubKeyExpiryHeight)
+					log.Printf("\nGot [%d] Client's New Share: %v\n", nowI, newShare.Value)
 				}()
 			}
 		}
