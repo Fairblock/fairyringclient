@@ -4,7 +4,6 @@ import (
 	distIBE "DistributedIBE"
 	"context"
 	cosmosmath "cosmossdk.io/math"
-	"encoding/base64"
 	"encoding/hex"
 	"fairyring/x/fairyring/types"
 	"fairyringclient/cosmosClient"
@@ -54,7 +53,7 @@ func setupShareClient(
 	if err != nil {
 		return "", err
 	}
-	log.Printf("Tx Hash: %s\n, Resp: %v\n", result.TxHash, result)
+	log.Printf("Tx Hash: %s\n", result.TxHash)
 	return result.MPK, nil
 }
 
@@ -74,7 +73,6 @@ type ValidatorClients struct {
 func main() {
 	var masterCosmosClient ValidatorClients
 	var validatorCosmosClients []ValidatorClients
-	var masterPublicKey string
 
 	// get all the variables from .env file
 	err := godotenv.Load()
@@ -149,17 +147,13 @@ func main() {
 				pks[i] = pk
 			}
 
-			_masterPublicKey, err := setupShareClient(
+			_, err = setupShareClient(
 				*masterCosmosClient.ShareApiClient,
 				setupGRpcEndpoint,
 				DefaultChainID,
 				pks,
 				TotalValidatorNum,
 			)
-			if err != nil {
-				log.Fatal(err)
-			}
-			masterPublicKey = _masterPublicKey
 		}
 	}
 
@@ -258,15 +252,6 @@ func main() {
 		allAccAddrs[index] = eachClient.GetAccAddress()
 	}
 
-	if !isManager {
-		_masterPublicKey, err := validatorCosmosClients[0].ShareApiClient.GetMasterPublicKey()
-
-		if err != nil {
-			log.Fatal(err)
-		}
-		masterPublicKey = _masterPublicKey
-	}
-
 	client, err := tmclient.New(
 		fmt.Sprintf(
 			"%s:%s",
@@ -306,14 +291,6 @@ func main() {
 	defer client.Stop()
 
 	s := bls.NewBLS12381Suite()
-
-	decodedPublicKey, err := base64.StdEncoding.DecodeString(masterPublicKey)
-	if err != nil {
-		log.Fatal(err)
-	}
-	publicKeyInHex := hex.EncodeToString(decodedPublicKey)
-
-	log.Printf("Latest Pub Key: %s\n", publicKeyInHex)
 
 	go func() {
 		for {
@@ -379,7 +356,7 @@ func main() {
 				nowEach := each
 				go func() {
 					if nowEach.CurrentShareExpiryBlock != 0 && nowEach.CurrentShareExpiryBlock <= processHeight {
-						log.Printf("[%d] Height: %d | Old share expiring, updatied to new share\n", nowI, processHeight)
+						log.Printf("[%d] Height: %d | Old share expiring, updating to new share\n", nowI, processHeight)
 						if nowEach.PendingShare == nil {
 							log.Printf("Pending share not found for client no.%d\n", nowI)
 							return
