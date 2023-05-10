@@ -5,7 +5,7 @@ import (
 	"context"
 	cosmosmath "cosmossdk.io/math"
 	"encoding/hex"
-	"fairyring/x/fairyring/types"
+	"fairyring/x/keyshare/types"
 	"fairyringclient/cosmosClient"
 	"fairyringclient/shareAPIClient"
 	"fmt"
