@@ -5,6 +5,7 @@ import (
 	"cosmossdk.io/math"
 	"encoding/hex"
 	"fairyring/app"
+	"fairyring/x/pep/types"
 	clienttx "github.com/cosmos/cosmos-sdk/client/tx"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
@@ -31,6 +32,7 @@ type CosmosClient struct {
 	txClient        tx.ServiceClient
 	grpcConn        grpc.ClientConn
 	bankQueryClient banktypes.QueryClient
+	pepQueryClient  types.QueryClient
 	privateKey      secp256k1.PrivKey
 	publicKey       cryptotypes.PubKey
 	account         authtypes.BaseAccount
@@ -64,6 +66,7 @@ func NewCosmosClient(
 
 	authClient := authtypes.NewQueryClient(grpcConn)
 	bankClient := banktypes.NewQueryClient(grpcConn)
+	pepeClient := types.NewQueryClient(grpcConn)
 
 	keyBytes, err := hex.DecodeString(privateKeyHex)
 	if err != nil {
@@ -98,6 +101,7 @@ func NewCosmosClient(
 		bankQueryClient: bankClient,
 		authClient:      authClient,
 		txClient:        tx.NewServiceClient(grpcConn),
+		pepQueryClient:  pepeClient,
 		grpcConn:        *grpcConn,
 		privateKey:      privateKey,
 		account:         baseAccount,
@@ -105,6 +109,17 @@ func NewCosmosClient(
 		publicKey:       pubKey,
 		chainID:         chainID,
 	}, nil
+}
+
+func (c *CosmosClient) GetLatestHeight() (uint64, error) {
+	resp, err := c.pepQueryClient.LatestHeight(
+		context.Background(),
+		&types.QueryLatestHeightRequest{},
+	)
+	if err != nil {
+		return 0, err
+	}
+	return resp.Height, nil
 }
 
 func (c *CosmosClient) GetBalance(denom string) (*math.Int, error) {
