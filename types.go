@@ -14,7 +14,7 @@ type KeyShare struct {
 }
 
 type ValidatorClients struct {
-	mutex                   sync.Mutex
+	Mutex                   sync.Mutex
 	CosmosClient            *cosmosClient.CosmosClient
 	ShareApiClient          *shareAPIClient.ShareAPIClient
 	CurrentShare            *KeyShare
@@ -22,32 +22,32 @@ type ValidatorClients struct {
 	CurrentShareExpiryBlock uint64
 }
 
-func (v ValidatorClients) SetCurrentShare(share *KeyShare) {
-	v.mutex.Lock()
+func (v *ValidatorClients) SetCurrentShare(share *KeyShare) {
+	v.Mutex.Lock()
 	v.PendingShare = share
-	v.mutex.Unlock()
+	v.Mutex.Unlock()
 }
 
-func (v ValidatorClients) SetPendingShare(pendingShare *KeyShare) {
-	v.mutex.Lock()
+func (v *ValidatorClients) SetPendingShare(pendingShare *KeyShare) {
+	v.Mutex.Lock()
 	v.PendingShare = pendingShare
-	v.mutex.Unlock()
+	v.Mutex.Unlock()
 }
 
-func (v ValidatorClients) SetExpiryBlock(blockNum uint64) {
-	v.mutex.Lock()
+func (v *ValidatorClients) SetExpiryBlock(blockNum uint64) {
+	v.Mutex.Lock()
 	v.CurrentShareExpiryBlock = blockNum
-	v.mutex.Unlock()
+	v.Mutex.Unlock()
 }
 
-func (v ValidatorClients) ActivatePendingShare() {
-	v.mutex.Lock()
+func (v *ValidatorClients) ActivatePendingShare() {
+	v.Mutex.Lock()
 	v.CurrentShare = v.PendingShare
 	v.PendingShare = nil
-	v.mutex.Unlock()
+	v.Mutex.Unlock()
 }
 
-func (v ValidatorClients) SetupShareClient(
+func (v *ValidatorClients) SetupShareClient(
 	endpoint string,
 	chainID string,
 	pks []string,

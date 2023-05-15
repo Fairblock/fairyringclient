@@ -17,6 +17,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	tmclient "github.com/tendermint/tendermint/rpc/client/http"
@@ -105,6 +106,7 @@ func main() {
 			log.Fatal("Error creating share api client:", err)
 		}
 		masterCosmosClient = ValidatorClients{
+			Mutex:          sync.Mutex{},
 			CosmosClient:   masterClient,
 			ShareApiClient: shareClient,
 		}
@@ -220,6 +222,7 @@ func main() {
 		log.Printf("Address: %s , Balance: %s %s\n", eachClient.GetAddress(), bal.String(), Denom)
 
 		validatorCosmosClients[index] = ValidatorClients{
+			Mutex:          sync.Mutex{},
 			CosmosClient:   eachClient,
 			ShareApiClient: shareClient,
 			CurrentShare: &KeyShare{
@@ -243,7 +246,7 @@ func main() {
 		)
 
 		validatorCosmosClients[index].SetExpiryBlock(pubKeys.ActivePubKey.Expiry)
-
+		log.Println("Current Share Expiry Block set to: ", validatorCosmosClients[index].CurrentShareExpiryBlock)
 		// Queued Pub key exists on pep module
 		if len(pubKeys.QueuedPubKey.PublicKey) > 1 && pubKeys.QueuedPubKey.Expiry > 0 {
 			previousShare, previousShareIndex, err := shareClient.GetLastShare(getNowStr())
@@ -329,6 +332,7 @@ func main() {
 				nowI := i
 				nowEach := each
 				go func() {
+					log.Printf("Current Share Expires at: %d", nowEach.CurrentShareExpiryBlock)
 					if nowEach.CurrentShareExpiryBlock != 0 && nowEach.CurrentShareExpiryBlock <= latestHeight {
 						log.Printf("[%d] Latest Height: %d | Old share expiring, updating to new share\n", nowI, latestHeight)
 						if nowEach.PendingShare == nil {
