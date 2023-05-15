@@ -44,6 +44,7 @@ const DefaultChainID = "fairyring"
 var (
 	masterCosmosClient     ValidatorClients
 	validatorCosmosClients []ValidatorClients
+	pks                    []string
 )
 
 func main() {
@@ -111,7 +112,7 @@ func main() {
 			ShareApiClient: shareClient,
 		}
 		if isManager {
-			pks := make([]string, TotalValidatorNum)
+			pks = make([]string, TotalValidatorNum)
 			var i uint64
 			for i = 0; i < TotalValidatorNum; i++ {
 				pk, err := readPemFile(fmt.Sprintf("%s%d%s", PubKeyFileNamePrefix, i+1, PubKeyFileNameFormat))
@@ -245,7 +246,7 @@ func main() {
 			pubKeys.QueuedPubKey.Expiry,
 		)
 
-		validatorCosmosClients[index].SetExpiryBlock(pubKeys.ActivePubKey.Expiry)
+		validatorCosmosClients[index].SetCurrentShareExpiryBlock(pubKeys.ActivePubKey.Expiry)
 		log.Println("Current Share Expiry Block set to: ", validatorCosmosClients[index].CurrentShareExpiryBlock)
 		// Queued Pub key exists on pep module
 		if len(pubKeys.QueuedPubKey.PublicKey) > 1 && pubKeys.QueuedPubKey.Expiry > 0 {
@@ -396,22 +397,18 @@ func listenForNewPubKey(txOut <-chan coretypes.ResultEvent) {
 				continue
 			}
 
-			expiryHeight, found := result.Events["queued-pubkey-created.queued-pubkey-created-expiry-height"]
+			expiryHeightStr, found := result.Events["queued-pubkey-created.queued-pubkey-created-expiry-height"]
 			if !found {
 				continue
 			}
 
-			activePubKeyExpiryHeightStr, found := result.Events["queued-pubkey-created.queued-pubkey-created-active-pubkey-expiry-height"]
-			if !found {
-				continue
-			}
-			activePubKeyExpiryHeight, err := strconv.ParseUint(activePubKeyExpiryHeightStr[0], 10, 64)
+			expiryHeight, err := strconv.ParseUint(expiryHeightStr[0], 10, 64)
 			if err != nil {
-				log.Printf("Error parsing active pubkey expiry height: %s\n", err.Error())
+				log.Printf("Error parsing pubkey expiry height: %s\n", err.Error())
 				continue
 			}
 
-			log.Printf("\nNew Pubkey found: %s | Expiry Height: %s\n", pubKey, expiryHeight)
+			log.Printf("New Pubkey found: %s | Expiry Height: %d\n", pubKey[0], expiryHeight)
 
 			for i, eachClient := range validatorCosmosClients {
 				nowI := i
@@ -425,8 +422,8 @@ func listenForNewPubKey(txOut <-chan coretypes.ResultEvent) {
 						Share: *newShare,
 						Index: index,
 					})
-					validatorCosmosClients[nowI].SetExpiryBlock(activePubKeyExpiryHeight)
-					log.Printf("\nGot [%d] Client's New Share: %v\n", nowI, newShare.Value)
+					validatorCosmosClients[nowI].SetPendingShareExpiryBlock(expiryHeight)
+					log.Printf("Got [%d] Client's New Share: %v | Expires at: %d\n", nowI, newShare.Value, expiryHeight)
 				}()
 			}
 		}

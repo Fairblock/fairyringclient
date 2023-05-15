@@ -20,6 +20,7 @@ type ValidatorClients struct {
 	CurrentShare            *KeyShare
 	PendingShare            *KeyShare
 	CurrentShareExpiryBlock uint64
+	PendingShareExpiryBlock uint64
 }
 
 func (v *ValidatorClients) SetCurrentShare(share *KeyShare) {
@@ -34,16 +35,24 @@ func (v *ValidatorClients) SetPendingShare(pendingShare *KeyShare) {
 	v.Mutex.Unlock()
 }
 
-func (v *ValidatorClients) SetExpiryBlock(blockNum uint64) {
+func (v *ValidatorClients) SetCurrentShareExpiryBlock(blockNum uint64) {
 	v.Mutex.Lock()
 	v.CurrentShareExpiryBlock = blockNum
+	v.Mutex.Unlock()
+}
+
+func (v *ValidatorClients) SetPendingShareExpiryBlock(blockNum uint64) {
+	v.Mutex.Lock()
+	v.PendingShareExpiryBlock = blockNum
 	v.Mutex.Unlock()
 }
 
 func (v *ValidatorClients) ActivatePendingShare() {
 	v.Mutex.Lock()
 	v.CurrentShare = v.PendingShare
+	v.CurrentShareExpiryBlock = v.PendingShareExpiryBlock
 	v.PendingShare = nil
+	v.PendingShareExpiryBlock = 0
 	v.Mutex.Unlock()
 }
 
