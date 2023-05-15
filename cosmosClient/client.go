@@ -111,6 +111,17 @@ func NewCosmosClient(
 	}, nil
 }
 
+func (c *CosmosClient) GetActivePubKey() (*types.QueryPubKeyResponse, error) {
+	resp, err := c.pepQueryClient.PubKey(
+		context.Background(),
+		&types.QueryPubKeyRequest{},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
 func (c *CosmosClient) GetLatestHeight() (uint64, error) {
 	resp, err := c.pepQueryClient.LatestHeight(
 		context.Background(),
