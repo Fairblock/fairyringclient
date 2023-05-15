@@ -187,7 +187,7 @@ func (s ShareAPIClient) GetLastShare(msg string) (*distIBE.Share, uint64, error)
 		return nil, 0, err
 	}
 
-	res, err := s.doRequest("/last-share-req", "GET", string(jsonStr))
+	res, err := s.doRequest("/share-req", "GET", string(jsonStr))
 	if err != nil {
 		return nil, 0, err
 	}
