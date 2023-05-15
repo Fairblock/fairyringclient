@@ -226,6 +226,34 @@ func main() {
 		}
 
 		allAccAddrs[index] = eachClient.GetAccAddress()
+
+		pubKeys, err := eachClient.GetActivePubKey()
+		if err != nil {
+			log.Fatal("Error getting active pub key on pep module: ", err)
+		}
+
+		log.Printf("Successfully fetch pub keys on pep module: Active: %v | Queued: %v", pubKeys.ActivePubKey, pubKeys.QueuedPubKey)
+
+		// Queued Pub key exists on pep module
+		if len(pubKeys.QueuedPubKey.PublicKey) > 1 && pubKeys.QueuedPubKey.Expiry > 0 {
+			previousShare, previousShareIndex, err := shareClient.GetLastShare(getNowStr())
+			if err != nil {
+				log.Fatal("Error getting previous share:", err)
+			}
+			log.Printf("Got previous share: %s | Index: %d", previousShare, previousShareIndex)
+
+			if previousShare != nil {
+				validatorCosmosClients[index].SetCurrentShare(&KeyShare{
+					Share: *previousShare,
+					Index: previousShareIndex,
+				})
+				validatorCosmosClients[index].SetPendingShare(&KeyShare{
+					Share: *share,
+					Index: shareIndex,
+				})
+				validatorCosmosClients[index].SetExpiryBlock(pubKeys.ActivePubKey.Expiry)
+			}
+		}
 	}
 
 	client, err := tmclient.New(

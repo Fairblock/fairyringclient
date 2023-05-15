@@ -22,6 +22,12 @@ type ValidatorClients struct {
 	CurrentShareExpiryBlock uint64
 }
 
+func (v ValidatorClients) SetCurrentShare(share *KeyShare) {
+	v.mutex.Lock()
+	v.PendingShare = share
+	v.mutex.Unlock()
+}
+
 func (v ValidatorClients) SetPendingShare(pendingShare *KeyShare) {
 	v.mutex.Lock()
 	v.PendingShare = pendingShare
