@@ -138,6 +138,10 @@ func (s ShareAPIClient) GetShare(msg string) (*distIBE.Share, uint64, error) {
 	var parsedGetShareResp GetShareRespBody
 	err = json.Unmarshal([]byte(parsedResp.Body), &parsedGetShareResp)
 
+	if len(parsedGetShareResp.EncShare) == 0 && len(parsedGetShareResp.Pk) == 0 {
+		return nil, 0, errors.New(fmt.Sprintf("Get Share Resp is empty, body: %s", parsedResp.Body))
+	}
+
 	decryptedShare, err := s.decryptShare(parsedGetShareResp.EncShare)
 	if err != nil {
 		return nil, 0, err
@@ -196,7 +200,11 @@ func (s ShareAPIClient) GetLastShare(msg string) (*distIBE.Share, uint64, error)
 
 	var parsedGetShareResp GetShareRespBody
 	err = json.Unmarshal([]byte(parsedResp.Body), &parsedGetShareResp)
-	log.Println(parsedGetShareResp.EncShare, parsedGetShareResp.Index, parsedGetShareResp.Pk)
+
+	if len(parsedGetShareResp.EncShare) == 0 && len(parsedGetShareResp.Pk) == 0 {
+		return nil, 0, errors.New(fmt.Sprintf("Get Last Share Resp is empty, body: %s", parsedResp.Body))
+	}
+
 	decryptedShare, err := s.decryptShare(parsedGetShareResp.EncShare)
 	if err != nil {
 		return nil, 0, err
