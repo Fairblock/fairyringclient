@@ -162,6 +162,65 @@ func (s ShareAPIClient) GetShare(msg string) (*distIBE.Share, uint64, error) {
 	}, indexInt, nil
 }
 
+func (s ShareAPIClient) GetLastShare(msg string) (*distIBE.Share, uint64, error) {
+	signed, err := s.signMessage([]byte(msg))
+	if err != nil {
+		return nil, 0, err
+	}
+
+	body := GetShareReq{
+		Path:       "/last-share-req",
+		HttpMethod: "GET",
+		QueryStringParameters: GetShareParam{
+			PublicKey: s.pubKey,
+			Msg:       msg,
+			SignedMsg: signed,
+		},
+	}
+
+	jsonStr, err := json.Marshal(body)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	res, err := s.doRequest("/last-share-req", "GET", string(jsonStr))
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var parsedResp Response
+	err = json.Unmarshal(res, &parsedResp)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var parsedGetShareResp GetShareRespBody
+	err = json.Unmarshal([]byte(parsedResp.Body), &parsedGetShareResp)
+
+	decryptedShare, err := s.decryptShare(parsedGetShareResp.EncShare)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	parsedShare := bls.NewKyberScalar()
+	err = parsedShare.UnmarshalBinary(decryptedShare)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	indexByte, err := hex.DecodeString(parsedGetShareResp.Index)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	indexInt := big.NewInt(0).SetBytes(indexByte).Uint64()
+
+	return &distIBE.Share{
+		Index: bls.NewKyberScalar().SetInt64(int64(indexInt)),
+		Value: parsedShare,
+	}, indexInt, nil
+}
+
 func (s ShareAPIClient) GetMasterPublicKey() (string, error) {
 	body := GetMasterPublicKeyReq{
 		Path:       "/mpk-req",
