@@ -5,3 +5,4 @@ encrypter
 .env
 privateKeys.json
 .env.old
+fairyringclient

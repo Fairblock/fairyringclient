@@ -196,7 +196,7 @@ func (s ShareAPIClient) GetLastShare(msg string) (*distIBE.Share, uint64, error)
 
 	var parsedGetShareResp GetShareRespBody
 	err = json.Unmarshal([]byte(parsedResp.Body), &parsedGetShareResp)
-
+	log.Println(parsedGetShareResp.EncShare, parsedGetShareResp.Index, parsedGetShareResp.Pk)
 	decryptedShare, err := s.decryptShare(parsedGetShareResp.EncShare)
 	if err != nil {
 		return nil, 0, err

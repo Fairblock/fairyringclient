@@ -232,7 +232,14 @@ func main() {
 			log.Fatal("Error getting active pub key on pep module: ", err)
 		}
 
-		log.Printf("Successfully fetch pub keys on pep module: Active: %v | Queued: %v", pubKeys.ActivePubKey, pubKeys.QueuedPubKey)
+		log.Println("Successfully fetch pub keys on pep module...")
+		log.Printf(
+			"Active Pub Key: %s Expires at: %d | Queued: %s Expires at: %d",
+			pubKeys.ActivePubKey.PublicKey,
+			pubKeys.ActivePubKey.Expiry,
+			pubKeys.QueuedPubKey.PublicKey,
+			pubKeys.QueuedPubKey.Expiry,
+		)
 
 		// Queued Pub key exists on pep module
 		if len(pubKeys.QueuedPubKey.PublicKey) > 1 && pubKeys.QueuedPubKey.Expiry > 0 {
