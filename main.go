@@ -129,7 +129,10 @@ func main() {
 			if err != nil {
 				log.Fatal("Error setting share client: ", err.Error())
 			}
-			log.Printf("\nSetup Tx Hash: %s\n", txHash)
+			log.Printf("Setup Tx Hash: %s\n", txHash)
+			
+			// Wait for the submit pub key tx to be confirmed before proceeding.
+			time.Sleep(time.Second * 5)
 		}
 	}
 
