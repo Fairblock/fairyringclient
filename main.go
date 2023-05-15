@@ -232,14 +232,15 @@ func main() {
 			log.Fatal("Error getting active pub key on pep module: ", err)
 		}
 
-		log.Println("Successfully fetch pub keys on pep module...")
 		log.Printf(
-			"Active Pub Key: %s Expires at: %d | Queued: %s Expires at: %d",
+			"\nActive Pub Key: %s Expires at: %d | Queued: %s Expires at: %d\n",
 			pubKeys.ActivePubKey.PublicKey,
 			pubKeys.ActivePubKey.Expiry,
 			pubKeys.QueuedPubKey.PublicKey,
 			pubKeys.QueuedPubKey.Expiry,
 		)
+
+		validatorCosmosClients[index].SetExpiryBlock(pubKeys.ActivePubKey.Expiry)
 
 		// Queued Pub key exists on pep module
 		if len(pubKeys.QueuedPubKey.PublicKey) > 1 && pubKeys.QueuedPubKey.Expiry > 0 {
@@ -258,7 +259,6 @@ func main() {
 					Share: *share,
 					Index: shareIndex,
 				})
-				validatorCosmosClients[index].SetExpiryBlock(pubKeys.ActivePubKey.Expiry)
 			}
 		}
 	}
