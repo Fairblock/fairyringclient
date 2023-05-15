@@ -130,7 +130,7 @@ func main() {
 				log.Fatal("Error setting share client: ", err.Error())
 			}
 			log.Printf("Setup Tx Hash: %s\n", txHash)
-			
+
 			// Wait for the submit pub key tx to be confirmed before proceeding.
 			time.Sleep(time.Second * 5)
 		}
@@ -235,8 +235,7 @@ func main() {
 			log.Fatal("Error getting active pub key on pep module: ", err)
 		}
 
-		log.Printf(
-			"\nActive Pub Key: %s Expires at: %d | Queued: %s Expires at: %d\n",
+		log.Printf("Active Pub Key: %s Expires at: %d | Queued: %s Expires at: %d\n",
 			pubKeys.ActivePubKey.PublicKey,
 			pubKeys.ActivePubKey.Expiry,
 			pubKeys.QueuedPubKey.PublicKey,
@@ -324,7 +323,7 @@ func main() {
 				log.Printf("Error getting latest height from pep, setting latest height as 0...")
 			}
 
-			log.Printf("Latest Block Height: %d | Deriving Share for Height: %s\n", height, processHeightStr)
+			log.Printf("Latest Block Height: %d | Execution Height: %d | Deriving Share for Height: %s\n", height, latestHeight, processHeightStr)
 
 			for i, each := range validatorCosmosClients {
 				nowI := i
