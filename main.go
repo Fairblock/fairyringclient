@@ -346,7 +346,7 @@ func main() {
 					currentShare := nowEach.CurrentShare
 
 					extractedKey := distIBE.Extract(s, currentShare.Share.Value, uint32(currentShare.Index), []byte(processHeightStr))
-					extractedKeyBinary, err := extractedKey.Sk.MarshalBinary()
+					extractedKeyBinary, err := extractedKey.SK.MarshalBinary()
 					if err != nil {
 						log.Fatal(err)
 					}
