@@ -1,7 +1,6 @@
 package shareAPIClient
 
 import (
-	distIBE "DistributedIBE"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
@@ -11,6 +10,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	distIBE "github.com/FairBlock/DistributedIBE"
 	bls "github.com/drand/kyber-bls12381"
 	"github.com/tendermint/tendermint/libs/json"
 	"github.com/tendermint/tendermint/types/time"

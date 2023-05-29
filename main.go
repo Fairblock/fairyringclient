@@ -1,7 +1,6 @@
 package main
 
 import (
-	distIBE "DistributedIBE"
 	"context"
 	cosmosmath "cosmossdk.io/math"
 	"encoding/hex"
@@ -9,6 +8,7 @@ import (
 	"fairyringclient/cosmosClient"
 	"fairyringclient/shareAPIClient"
 	"fmt"
+	distIBE "github.com/FairBlock/DistributedIBE"
 	cosmostypes "github.com/cosmos/cosmos-sdk/types"
 	bls "github.com/drand/kyber-bls12381"
 	"github.com/joho/godotenv"

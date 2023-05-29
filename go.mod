@@ -3,9 +3,9 @@ module fairyringclient
 go 1.19
 
 require (
-	DistributedIBE v0.0.0
 	cosmossdk.io/math v1.0.0
 	fairyring v0.0.0-00010101000000-000000000000
+	github.com/FairBlock/DistributedIBE v0.0.0-20230528025616-f58fb2b93eaf
 	github.com/cosmos/cosmos-sdk v0.46.3
 	github.com/drand/kyber-bls12381 v0.2.5
 	github.com/joho/godotenv v1.5.1
@@ -50,7 +50,7 @@ require (
 	github.com/dgraph-io/badger/v2 v2.2007.4 // indirect
 	github.com/dgraph-io/ristretto v0.1.0 // indirect
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 // indirect
-	github.com/drand/kyber v1.1.17 // indirect
+	github.com/drand/kyber v1.2.0 // indirect
 	github.com/dustin/go-humanize v1.0.1-0.20200219035652-afde56e7acac // indirect
 	github.com/dvsekhvalnov/jose2go v1.5.0 // indirect
 	github.com/felixge/httpsnoop v1.0.1 // indirect
@@ -131,13 +131,13 @@ require (
 	github.com/zondax/hid v0.9.1-0.20220302062450-5552068d2266 // indirect
 	go.etcd.io/bbolt v1.3.6 // indirect
 	go.opencensus.io v0.24.0 // indirect
-	golang.org/x/crypto v0.5.0 // indirect
+	golang.org/x/crypto v0.7.0 // indirect
 	golang.org/x/exp v0.0.0-20221205204356-47842c84f3db // indirect
-	golang.org/x/net v0.7.0 // indirect
+	golang.org/x/net v0.8.0 // indirect
 	golang.org/x/oauth2 v0.5.0 // indirect
-	golang.org/x/sys v0.5.0 // indirect
-	golang.org/x/term v0.5.0 // indirect
-	golang.org/x/text v0.7.0 // indirect
+	golang.org/x/sys v0.6.0 // indirect
+	golang.org/x/term v0.6.0 // indirect
+	golang.org/x/text v0.8.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/api v0.110.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
@@ -150,7 +150,5 @@ require (
 )
 
 replace fairyring => ../fairyring/
-
-replace DistributedIBE => ../fairyring/DistributedIBE/
 
 replace github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
