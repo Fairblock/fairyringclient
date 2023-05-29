@@ -2,6 +2,20 @@
 
 `fairyringclient` is a client for submitting their keyshare to [`fairyring`](https://github.com/FairBlock/fairyring).
 
+## Building the client
+
+This command will build the project to an executable in this directory
+
+```bash
+go build
+```
+
+If you would like to have the executable in `GOPATH`
+
+```bash
+go install
+```
+
 ## Generate your identity key
 
 1. Create keys directory
@@ -118,8 +132,17 @@ What the master private key does, is it will load the account and send some toke
 Then run the client by the following command:
 
 ```
-go run main.go
+fairyringclient
 ```
+
+If you get this error `fairyringclient: command not found`, Run the following command
+
+```bash
+export PATH=$PATH:$(go env GOPATH)/bin
+```
+
+or you can run the executable by `./fairyringclient` after go build
+
 
 The client will look for `VALIDATOR_PRIVATE_KEYS` in `.env`, and will automatically run the same number of client to submit keyshares.
 
