@@ -77,6 +77,12 @@ func NewCosmosClient(
 	pubKey := privateKey.PubKey()
 	address := pubKey.Address()
 
+	cfg := cosmostypes.GetConfig()
+	cfg.SetBech32PrefixForAccount("fairy", "fairypub")
+	cfg.SetBech32PrefixForValidator("fairyvaloper", "fairyvaloperpub")
+	cfg.SetBech32PrefixForConsensusNode("fairyvalcons", "fairyrvalconspub")
+	cfg.Seal()
+
 	accAddr := cosmostypes.AccAddress(address)
 	addr := accAddr.String()
 
