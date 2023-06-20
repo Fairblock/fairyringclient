@@ -38,8 +38,8 @@ const PubKeyFileNamePrefix = "keys/pk"
 
 const APIUrl = "https://7d3q6i0uk2.execute-api.us-east-1.amazonaws.com"
 
-const DefaultDenom = "frt"
-const DefaultChainID = "fairyring"
+const DefaultDenom = "ufariy"
+const DefaultChainID = "fairytest-1"
 
 var (
 	masterCosmosClient     ValidatorClients
