@@ -352,18 +352,10 @@ func main() {
 					}
 					extractedKeyHex := hex.EncodeToString(extractedKeyBinary)
 
-					commitmentPoint := s.G1().Point().Mul(currentShare.Share.Value, s.G1().Point().Base())
-					commitmentBinary, err := commitmentPoint.MarshalBinary()
-
-					if err != nil {
-						log.Fatal(err)
-					}
-
 					go func() {
 						resp, err := nowEach.CosmosClient.BroadcastTx(&types.MsgSendKeyshare{
 							Creator:       nowEach.CosmosClient.GetAddress(),
 							Message:       extractedKeyHex,
-							Commitment:    hex.EncodeToString(commitmentBinary),
 							KeyShareIndex: currentShare.Index,
 							BlockHeight:   processHeight,
 						}, true)
