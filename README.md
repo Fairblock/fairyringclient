@@ -67,15 +67,13 @@ GRPC_PORT=9090
 PRIVATE_KEY_FILE_NAME_INDEX_START_AT=1
 
 # Only update this if the default token denom is not FRT
-DENOM=frt
+DENOM=ufairy
 
 # Put your private key here, separate with comma
 VALIDATOR_PRIVATE_KEYS=private_key_1,private_key2,private_key3
 ```
 
 ### Prepare account for submitting keyshare to fairyring chain
-
-The script `generate_keys.sh` will generate private key(s) for you, you can you the one it generated or use your own private key.
 
 Make sure the account you are using already activated and have enough balance for sending transaction
 
