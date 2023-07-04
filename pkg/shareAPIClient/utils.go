@@ -10,7 +10,7 @@ import (
 	"os"
 )
 
-func pemToPrivateKey(fileName string) (*rsa.PrivateKey, error) {
+func PemToPrivateKey(fileName string) (*rsa.PrivateKey, error) {
 	file, err := os.Open(fileName)
 	if err != nil {
 		return nil, err
@@ -46,7 +46,7 @@ func pemToPrivateKey(fileName string) (*rsa.PrivateKey, error) {
 	return privateKey, nil
 }
 
-func bytesToPemStr(b []byte, types string) (string, error) {
+func BytesToPemStr(b []byte, types string) (string, error) {
 	var pemKey = &pem.Block{
 		Type:  types,
 		Bytes: b,

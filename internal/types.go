@@ -1,8 +1,8 @@
-package main
+package internal
 
 import (
-	"fairyringclient/cosmosClient"
-	"fairyringclient/shareAPIClient"
+	"fairyringclient/pkg/cosmosClient"
+	"fairyringclient/pkg/shareAPIClient"
 	distIBE "github.com/FairBlock/DistributedIBE"
 	"math"
 	"sync"

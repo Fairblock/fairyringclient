@@ -30,12 +30,12 @@ type ShareAPIClient struct {
 }
 
 func NewShareAPIClient(url, privateKeyPath string) (*ShareAPIClient, error) {
-	pKey, err := pemToPrivateKey(privateKeyPath)
+	pKey, err := PemToPrivateKey(privateKeyPath)
 	if err != nil {
 		return nil, err
 	}
 
-	pubKeyStr, err := bytesToPemStr(x509.MarshalPKCS1PublicKey(&pKey.PublicKey), publicKeyType)
+	pubKeyStr, err := BytesToPemStr(x509.MarshalPKCS1PublicKey(&pKey.PublicKey), publicKeyType)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +62,7 @@ func (s ShareAPIClient) signMessage(message []byte) (string, error) {
 	}
 
 	// return base64.StdEncoding.EncodeToString(sig), nil
-	signature, err := bytesToPemStr(sig, signatureType)
+	signature, err := BytesToPemStr(sig, signatureType)
 
 	return signature, nil
 }
