@@ -16,121 +16,124 @@ If you would like to have the executable in `GOPATH`
 go install
 ```
 
-## Generate your identity key
+## Setting up the client
 
-1. Create keys directory
+### Init the config file & keys directory
 
-```bash
-mkdir keys
-```
+This command will create a config directory under your `$HOME` directory: `$HOME/.fairyringclient`.
+It will also create the RSA key for interacting with the ShareAPI for you automatically,
+you can disable this by adding `--no-rsa-key` flag.
 
-2. Run `generate_keys.sh`
-
-```bash
-./generate_keys.sh {start_at} {end_at}
-```
-
-#### Examples
-
-Let's say you would like to create two keys, from 1 to 2, enter the following command:
+If you would like it to generate a new cosmos private key for you, you can add `--with-cosmos-key` flag
 
 ```bash
-./generate_keys.sh 1 2
+fairyringclient config init
 ```
 
-Let's say you would like to create only one keys, enter the following command:
+### Showing the config
+
+After initializing the config, you will be able to see the config detail by:
+```bash
+fairyringclient config show
+```
+
+### Updating the config
+
+You can update the config by editing the config file in `$HOME/.fairyringclient/config.yml` or you can use the following command:
 
 ```bash
-./generate_keys.sh 1 1
+fairyringclient config update
 ```
 
-This command will generate a public key & private key for you.
+You can only update the node config with this command, if you would like to update RSA Keys / Cosmos Keys, please refer to [this section]()
 
-The public key is your identity for our API server to recognize you and to give you the correct key share and for the server to encrypt your keyshare with your public key.
+Here are the available flags for updating the config:
 
-The private key is for you to decrypt the keyshare you got from API server
-
-## Setting up the client for testnet / mainnet
-
-### Updating .env
-
-These are the fields that would require update from the `.env.example`:
-
-```
-NODE_IP_ADDRESS=http://your_node_address
-NODE_PORT=your_node_port
-
-GRPC_IP_ADDRESS=your_node_address
-GRPC_PORT=9090
-
-# Only update this if your private key file index is not start from 1
-PRIVATE_KEY_FILE_NAME_INDEX_START_AT=1
-
-# Only update this if the default token denom is not FRT
-DENOM=ufairy
-
-# Put your private key here, separate with comma
-VALIDATOR_PRIVATE_KEYS=private_key_1,private_key2,private_key3
+```bash
+--chain-id string   Update config chain id (default "fairytest-1")
+--denom string      Update config denom (default "ufairy")
+--grpc-port uint    Update config grpc-port (default 9090)
+--ip string         Update config node ip address (default "127.0.0.1")
+--port uint         Update config node port (default 26657)
+--protocol string   Update config node protocol (default "http")
 ```
 
-### Prepare account for submitting keyshare to fairyring chain
+#### Example on updating config
 
-Make sure the account you are using already activated and have enough balance for sending transaction
+Lets say you would like to update the chain id to `"fairyring"` and the denom to `"fairy"`, you can execute the following command:
 
-Then, put your private key in `VALIDATOR_PRIVATE_KEYS` in `.env`. If you are using your own account.
-
-Make sure you have te same number of public keys & private keys in the `keys` directory and the number of private keys in `VALIDATOR_PRIVATE_KEYS`
-
-## Setting up the client for local testnet
-
-### 1. Start the chain by navigating to `fairyring` directory.
-
-```
-ignite chain serve
+```bash
+fairyringclient config update --chain-id fairyring --denom fairy
 ```
 
-Optionally add in `-r` flag to reset chain state, and `-v` to have verbose output. `-c` to specific a config file
+### Manging RSA Keys & Cosmos Account Private Keys
 
-The following command is recommended  when running a local fairyring chain for testing purpose
+#### RSA Keys
 
-```
-ignite chain serve -c fairyring.yml -v
-```
-** Add the `-r` flag if you would like to reset chain state
+##### Adding RSA Keys
 
-### 2. Modify client's config file
+You can add RSA Key to the client by using
 
-Navigate to this repo and create `.env` file, you can look at the `.env.example` for example.
-
-What usually need to be updated in the `.env` is the following:
-
-```
-NODE_IP_ADDRESS=http://change_to_your_node_ip
-NODE_PORT=change_to_your_node_port
-
-# Update to a correct total validator number for manager to setup correctly
-TOTAL_VALIDATOR_NUM=
-
-# Update IS_MANAGER to true
-IS_MANAGER=true
-
-MASTER_PRIVATE_KEY=
+```bash
+fairyringclient keys rsa add [path-to-rsa-private-key]
 ```
 
-For the master private key, if you are running fairyring with the recommended command, you can use the following command to export the private key:
+This command will automatically derive the public key, rename the key file and add them to the keys directory `$HOME/.fairyringclient/keys` for you
 
-`fairyringd keys export bob --unsafe --unarmored-hex`
+##### Listing RSA Keys
 
-You will also need to update the `DENOM` in `main.go line 36` to `token`
+You can list all the RSA Key in the keys directory by
 
-What the master private key does, is it will load the account and send some tokens from the master to all the accounts in `VALIDATOR_PRIVATE_KEYS`
+```bash
+fairyringclient keys rsa list
+```
 
-## Start the client
+#### Cosmos Account Keys
 
-Then run the client by the following command:
+##### Adding Cosmos Account Private Key
+
+You can add a private key to the client by
+
+```bash
+fairyringclient keys cosmos add [private-key-in-hex]
+```
+
+Or you can add the private key to the `config.yml` manually under the `privatekeys` section:
+
+```bash
+privatekeys:
+    - private_key_1
+    - private_key_2
+```
+
+##### Listing all the Cosmos Account Private Key
+
+This command will list all the private keys added to the client config
+
+```bash
+fairyringclient keys cosmos list
+```
+
+##### Removing Cosmos Account Private Key
+
+You can remove a specific private key with this command
+
+```bash
+fairyringclient keys cosmos remove [private_key_index]
+```
+
+You can get the private key index by using the `fairyringclient keys cosmos list` command
+
+**Make sure the account you are using already activated and have enough balance for sending transaction and 
+you have te same number of RSA keys and the number of cosmos private keys**
+
+## Starting the client
+
+You can start the client by the following command, if will automatically use the config under
+`$HOME/.fairyringclient/config.yml` directory.
 
 ```
-fairyringclient
+fairyringclient start
 ```
 
 If you get this error `fairyringclient: command not found`, Run the following command
@@ -139,9 +142,4 @@ If you get this error `fairyringclient: command not found`, Run the following co
 export PATH=$PATH:$(go env GOPATH)/bin
 ```
 
-or you can run the executable by `./fairyringclient` after go build
-
-
-The client will look for `VALIDATOR_PRIVATE_KEYS` in `.env`, and will automatically run the same number of client to submit keyshares.
-
-<small>* Separate your private keys with comma.</small>
+or you can run the executable by `./fairyringclient start` after `go build`
