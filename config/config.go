@@ -60,6 +60,14 @@ func ReadConfigFromFile() (*Config, error) {
 	return &cfg, nil
 }
 
+func GetDefaultKeysDir() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return homeDir + "/" + DefaultKeyFolderName, nil
+}
+
 func (c *Config) GetFairyRingNodeURI() string {
 	nodeURI := c.FairyRingNode.Protocol + "://" + c.FairyRingNode.IP + ":" + strconv.FormatUint(c.FairyRingNode.Port, 10)
 	return nodeURI
