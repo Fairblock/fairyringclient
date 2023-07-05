@@ -87,6 +87,8 @@ var keysRsaAdd = &cobra.Command{
 			return
 		}
 
+		fmt.Printf("RSA Private Key added as %s\n", keysPath+"/sk"+fileNum+".pem")
+
 		// Creating RSA Public Key
 		pemPublicKey := pem.Block{
 			Type:  "RSA PUBLIC KEY",
@@ -105,5 +107,9 @@ var keysRsaAdd = &cobra.Command{
 			fmt.Printf("Error writing RSA public key: %s\n", err.Error())
 			return
 		}
+
+		fmt.Printf("RSA Public Key added as %s\n", keysPath+"/pk"+fileNum+".pem")
+
+		fmt.Println("RSA Keys added successfully!")
 	},
 }
