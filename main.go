@@ -334,14 +334,14 @@ func main() {
 				nowEach := each
 				go func() {
 					log.Printf("Current Share Expires at: %d", nowEach.CurrentShareExpiryBlock)
-					if nowEach.CurrentShareExpiryBlock != 0 && nowEach.CurrentShareExpiryBlock <= latestHeight {
-						log.Printf("[%d] Latest Height: %d | Old share expiring, updating to new share\n", nowI, latestHeight)
+					if nowEach.CurrentShareExpiryBlock != 0 && nowEach.CurrentShareExpiryBlock <= uint64(height) {
+						log.Printf("[%d] current share expired, trying to switch to the queued one...\n", nowI)
 						if nowEach.PendingShare == nil {
-							log.Printf("Pending share not found for client no.%d\n", nowI)
+							log.Printf("[%d] Unable to switch to latest share, pending share not found...\n", nowI)
 							return
 						}
-
 						validatorCosmosClients[nowI].ActivatePendingShare()
+						log.Printf("[%d] Active share updated...\n", nowI)
 					}
 					currentShare := nowEach.CurrentShare
 
