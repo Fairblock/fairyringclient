@@ -265,6 +265,7 @@ func main() {
 					Share: *share,
 					Index: shareIndex,
 				})
+				validatorCosmosClients[index].SetPendingShareExpiryBlock(pubKeys.QueuedPubKey.Expiry)
 			}
 		}
 	}
