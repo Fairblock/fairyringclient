@@ -323,12 +323,7 @@ func main() {
 			processHeight := uint64(height + 1)
 			processHeightStr := strconv.FormatUint(processHeight, 10)
 
-			latestHeight, err := validatorCosmosClients[0].CosmosClient.GetLatestHeight()
-			if err != nil {
-				log.Printf("Error getting latest height from pep, setting latest height as 0...")
-			}
-
-			log.Printf("Latest Block Height: %d | Execution Height: %d | Deriving Share for Height: %s\n", height, latestHeight, processHeightStr)
+			log.Printf("Latest Block Height: %d | Deriving Share for Height: %s\n", height, processHeightStr)
 
 			for i, each := range validatorCosmosClients {
 				nowI := i
