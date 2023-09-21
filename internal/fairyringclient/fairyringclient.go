@@ -16,12 +16,12 @@ import (
 	"time"
 
 	distIBE "github.com/FairBlock/DistributedIBE"
+	coretypes "github.com/cometbft/cometbft/rpc/core/types"
 	cosmostypes "github.com/cosmos/cosmos-sdk/types"
 	bls "github.com/drand/kyber-bls12381"
-	coretypes "github.com/tendermint/tendermint/rpc/core/types"
 
-	tmclient "github.com/tendermint/tendermint/rpc/client/http"
-	tmtypes "github.com/tendermint/tendermint/types"
+	tmclient "github.com/cometbft/cometbft/rpc/client/http"
+	tmtypes "github.com/cometbft/cometbft/types"
 )
 
 var (

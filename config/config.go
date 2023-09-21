@@ -3,8 +3,8 @@ package config
 import (
 	"fairyringclient/pkg/rsa"
 	"fmt"
+	"github.com/cometbft/cometbft/crypto"
 	"github.com/spf13/viper"
-	"github.com/tendermint/tendermint/crypto"
 	"log"
 	"os"
 	"path/filepath"
