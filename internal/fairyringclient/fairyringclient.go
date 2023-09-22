@@ -151,12 +151,16 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 
 	client, err := tmclient.New(
 		fmt.Sprintf(
-			"%s:%s",
-			os.Getenv("NODE_IP_ADDRESS"),
-			os.Getenv("NODE_PORT"),
+			"%s://%s:%d",
+			cfg.FairyRingNode.Protocol,
+			cfg.FairyRingNode.IP,
+			cfg.FairyRingNode.Port,
 		),
 		"/websocket",
 	)
+	if err != nil {
+		log.Fatal(err)
+	}
 	err = client.Start()
 	if err != nil {
 		log.Fatal(err)
