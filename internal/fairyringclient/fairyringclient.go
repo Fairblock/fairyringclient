@@ -12,7 +12,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	distIBE "github.com/FairBlock/DistributedIBE"
@@ -102,7 +101,6 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 		log.Printf("Address: %s , Balance: %s %s\n", eachClient.GetAddress(), bal.String(), Denom)
 
 		validatorCosmosClients[index] = ValidatorClients{
-			Mutex:          sync.Mutex{},
 			CosmosClient:   eachClient,
 			ShareApiClient: shareClient,
 			CurrentShare: &KeyShare{
@@ -133,17 +131,21 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 			if err != nil {
 				log.Fatal("Error getting previous share:", err)
 			}
-			log.Printf("Got previous share: %s | Index: %d", previousShare, previousShareIndex)
+			log.Printf("[%d] Got previous share: %s | Index: %d", index, previousShare, previousShareIndex)
 
 			if previousShare != nil {
 				validatorCosmosClients[index].SetCurrentShare(&KeyShare{
 					Share: *previousShare,
 					Index: previousShareIndex,
 				})
+
+				log.Printf("[%d] Updated current share: %v", index, validatorCosmosClients[index].CurrentShare)
+
 				validatorCosmosClients[index].SetPendingShare(&KeyShare{
 					Share: *share,
 					Index: shareIndex,
 				})
+
 				validatorCosmosClients[index].SetPendingShareExpiryBlock(pubKeys.QueuedPubKey.Expiry)
 			}
 		}
@@ -212,8 +214,8 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 				nowI := i
 				nowEach := each
 				go func() {
-					log.Printf("Current Share Expires at: %d", nowEach.CurrentShareExpiryBlock)
-					if nowEach.CurrentShareExpiryBlock != 0 && nowEach.CurrentShareExpiryBlock <= uint64(height) {
+					log.Printf("Current Share Expires at: %d | %v", nowEach.CurrentShareExpiryBlock, nowEach.CurrentShare.Share)
+					if nowEach.CurrentShareExpiryBlock != 0 && nowEach.CurrentShareExpiryBlock <= processHeight {
 						log.Printf("[%d] current share expired, trying to switch to the queued one...\n", nowI)
 						if nowEach.PendingShare == nil {
 							log.Printf("[%d] Unable to switch to latest share, pending share not found...\n", nowI)
@@ -222,8 +224,9 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 
 						validatorCosmosClients[nowI].ActivatePendingShare()
 						log.Printf("[%d] Active share updated...\n", nowI)
+						log.Printf("[%d] New Share: %v\n", nowI, validatorCosmosClients[nowI].CurrentShare)
 					}
-					currentShare := nowEach.CurrentShare
+					currentShare := validatorCosmosClients[nowI].CurrentShare
 
 					extractedKey := distIBE.Extract(s, currentShare.Share.Value, uint32(currentShare.Index), []byte(processHeightStr))
 					extractedKeyBinary, err := extractedKey.SK.MarshalBinary()
@@ -285,18 +288,17 @@ func listenForNewPubKey(txOut <-chan coretypes.ResultEvent) {
 			for i, eachClient := range validatorCosmosClients {
 				nowI := i
 				nowClient := eachClient
-				go func() {
-					newShare, index, err := nowClient.ShareApiClient.GetShare(getNowStr())
-					if err != nil {
-
-					}
-					validatorCosmosClients[nowI].SetPendingShare(&KeyShare{
-						Share: *newShare,
-						Index: index,
-					})
-					validatorCosmosClients[nowI].SetPendingShareExpiryBlock(expiryHeight)
-					log.Printf("Got [%d] Client's New Share: %v | Expires at: %d\n", nowI, newShare.Value, expiryHeight)
-				}()
+				newShare, index, err := nowClient.ShareApiClient.GetShare(getNowStr())
+				if err != nil {
+					log.Printf("[%d] Error getting the pending keyshare: %s", nowI, err.Error())
+					return
+				}
+				validatorCosmosClients[nowI].SetPendingShare(&KeyShare{
+					Share: *newShare,
+					Index: index,
+				})
+				validatorCosmosClients[nowI].SetPendingShareExpiryBlock(expiryHeight)
+				log.Printf("Got [%d] Client's New Share: %v | Expires at: %d\n", nowI, newShare.Value, expiryHeight)
 			}
 		}
 	}

@@ -3,10 +3,8 @@ package fairyringclient
 import (
 	"fairyringclient/pkg/cosmosClient"
 	"fairyringclient/pkg/shareAPIClient"
-	"math"
-	"sync"
-
 	distIBE "github.com/FairBlock/DistributedIBE"
+	"math"
 )
 
 type KeyShare struct {
@@ -15,7 +13,6 @@ type KeyShare struct {
 }
 
 type ValidatorClients struct {
-	Mutex                   sync.Mutex
 	CosmosClient            *cosmosClient.CosmosClient
 	ShareApiClient          *shareAPIClient.ShareAPIClient
 	CurrentShare            *KeyShare
@@ -25,36 +22,26 @@ type ValidatorClients struct {
 }
 
 func (v *ValidatorClients) SetCurrentShare(share *KeyShare) {
-	v.Mutex.Lock()
-	v.PendingShare = share
-	v.Mutex.Unlock()
+	v.CurrentShare = share
 }
 
 func (v *ValidatorClients) SetPendingShare(pendingShare *KeyShare) {
-	v.Mutex.Lock()
 	v.PendingShare = pendingShare
-	v.Mutex.Unlock()
 }
 
 func (v *ValidatorClients) SetCurrentShareExpiryBlock(blockNum uint64) {
-	v.Mutex.Lock()
 	v.CurrentShareExpiryBlock = blockNum
-	v.Mutex.Unlock()
 }
 
 func (v *ValidatorClients) SetPendingShareExpiryBlock(blockNum uint64) {
-	v.Mutex.Lock()
 	v.PendingShareExpiryBlock = blockNum
-	v.Mutex.Unlock()
 }
 
 func (v *ValidatorClients) ActivatePendingShare() {
-	v.Mutex.Lock()
 	v.CurrentShare = v.PendingShare
 	v.CurrentShareExpiryBlock = v.PendingShareExpiryBlock
 	v.PendingShare = nil
 	v.PendingShareExpiryBlock = 0
-	v.Mutex.Unlock()
 }
 
 func (v *ValidatorClients) SetupShareClient(
