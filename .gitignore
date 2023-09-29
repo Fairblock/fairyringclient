@@ -1,8 +1,5 @@
 .DS_Store
 .idea/
 keys/
-encrypter
 .env
-privateKeys.json
 .env.old
-fairyringclient
