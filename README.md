@@ -127,6 +127,26 @@ You can get the private key index by using the `fairyringclient keys cosmos list
 **Make sure the account you are using already activated and have enough balance for sending transaction and 
 you have te same number of RSA keys and the number of cosmos private keys**
 
+
+### Address Delegate
+
+You can now delegate another address to submit the key share for you. 
+Your address need to be a validator in the `keyshare` module in order to do this.
+You will also need the private for your validator account set in the client config before running this command
+After delegating, you can remove the validator's private key and add the delegated address private key to the client instead
+
+#### Authorizing an address
+
+```bash
+fairyringclient delegate add [address]
+```
+
+#### Removing the authorized address
+
+```bash
+fairyringclient delegate remove [address]
+```
+
 ## Starting the client
 
 You can start the client by the following command, if will automatically use the config under
