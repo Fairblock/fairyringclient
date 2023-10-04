@@ -196,6 +196,7 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 	s := bls.NewBLS12381Suite()
 
 	go listenForNewPubKey(txOut)
+	go listenForStartSubmitGeneralKeyShare(txOut)
 
 	for {
 		select {
