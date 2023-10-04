@@ -263,6 +263,61 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 	}
 }
 
+func listenForStartSubmitGeneralKeyShare(txOut <-chan coretypes.ResultEvent) {
+	for {
+		select {
+		case result := <-txOut:
+			id, found := result.Events["start-send-general-keyshare.start-send-general-keyshare-identity"]
+			if !found {
+				continue
+			}
+
+			if len(id) < 1 {
+				continue
+			}
+
+			identity := id[0]
+
+			log.Printf("Start Submitting General Key Share for identity: %s", identity)
+			s := bls.NewBLS12381Suite()
+			for i, eachClient := range validatorCosmosClients {
+				nowI := i
+				nowClient := eachClient
+
+				currentShare := nowClient.CurrentShare
+
+				extractedKey := distIBE.Extract(s, currentShare.Share.Value, uint32(currentShare.Index), []byte(identity))
+				extractedKeyBinary, err := extractedKey.SK.MarshalBinary()
+				if err != nil {
+					log.Fatal(err)
+				}
+				extractedKeyHex := hex.EncodeToString(extractedKeyBinary)
+
+				resp, err := nowClient.CosmosClient.BroadcastTx(&types.MsgCreateGeneralKeyShare{
+					Creator:       nowClient.CosmosClient.GetAddress(),
+					KeyShare:      extractedKeyHex,
+					KeyShareIndex: currentShare.Index,
+					IdType:        "private-gov-identity",
+					IdValue:       identity,
+				}, true)
+				if err != nil {
+					log.Printf("[%d] Submit General KeyShare for Identity %s ERROR: %s\n", nowI, identity, err.Error())
+				}
+				txResp, err := nowClient.CosmosClient.WaitForTx(resp.TxHash, time.Second)
+				if err != nil {
+					log.Printf("[%d] General KeyShare for Identity %s Failed: %s\n", nowI, identity, err.Error())
+					return
+				}
+				if txResp.TxResponse.Code != 0 {
+					log.Printf("[%d] General KeyShare for Identity %s Failed: %s\n", nowI, identity, txResp.TxResponse.RawLog)
+					return
+				}
+				log.Printf("[%d] Submit General KeyShare for Identity %s Confirmed\n", nowI, identity)
+			}
+		}
+	}
+}
+
 func listenForNewPubKey(txOut <-chan coretypes.ResultEvent) {
 	for {
 		select {
