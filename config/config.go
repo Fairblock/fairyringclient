@@ -14,7 +14,7 @@ import (
 const (
 	DefaultFolderName    = ".fairyringclient"
 	DefaultKeyFolderName = DefaultFolderName + "/keys"
-	DefaultChainID       = "fairytest-1"
+	DefaultChainID       = "fairytest-2"
 	DefaultDenom         = "ufairy"
 	DefaultShareAPIUrl   = "https://7d3q6i0uk2.execute-api.us-east-1.amazonaws.com"
 )
