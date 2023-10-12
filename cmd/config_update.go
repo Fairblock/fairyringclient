@@ -4,6 +4,7 @@ import (
 	"fairyringclient/config"
 	"fmt"
 	"github.com/spf13/cobra"
+	"net/url"
 )
 
 // configUpdateCmd represents the config update command
@@ -24,6 +25,7 @@ var configUpdateCmd = &cobra.Command{
 		chainProtocol, _ := cmd.Flags().GetString("protocol")
 		chainGrpcPort, _ := cmd.Flags().GetUint64("grpc-port")
 		chainPort, _ := cmd.Flags().GetUint64("port")
+		apiURL, _ := cmd.Flags().GetString("api-url")
 
 		cfg.FairyRingNode = config.Node{
 			Protocol: chainProtocol,
@@ -33,6 +35,14 @@ var configUpdateCmd = &cobra.Command{
 			Denom:    chainDenom,
 			ChainID:  chainID,
 		}
+
+		_, err = url.ParseRequestURI(apiURL)
+		if err != nil {
+			fmt.Printf("Invalid API URL Provided '%s', Error: %s\n", apiURL, err.Error())
+			return
+		}
+
+		cfg.ShareAPIUrl = apiURL
 
 		if err = cfg.SaveConfig(); err != nil {
 			fmt.Printf("Error saving updated config to system: %s\n", err.Error())
@@ -56,4 +66,5 @@ func init() {
 	configUpdateCmd.Flags().String("ip", cfg.FairyRingNode.IP, "Update config node ip address")
 	configUpdateCmd.Flags().Uint64("port", cfg.FairyRingNode.Port, "Update config node port")
 	configUpdateCmd.Flags().String("protocol", cfg.FairyRingNode.Protocol, "Update config node protocol")
+	configUpdateCmd.Flags().String("api-url", cfg.ShareAPIUrl, "Update config API URL")
 }

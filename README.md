@@ -50,6 +50,7 @@ You can only update the node config with this command, if you would like to upda
 Here are the available flags for updating the config:
 
 ```bash
+--api-url string    Update config API URL (default "https://7d3q6i0uk2.execute-api.us-east-1.amazonaws.com")
 --chain-id string   Update config chain id (default "fairytest-1")
 --denom string      Update config denom (default "ufairy")
 --grpc-port uint    Update config grpc-port (default 9090)
