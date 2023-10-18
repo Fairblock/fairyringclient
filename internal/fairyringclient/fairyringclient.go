@@ -184,7 +184,7 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 
 	for i, eachClient := range validatorCosmosClients {
 		eachAddr := eachClient.CosmosClient.GetAddress()
-		_, err = eachClient.CosmosClient.BroadcastTx(&types.MsgRegisterValidator{
+		txResp, err := eachClient.CosmosClient.BroadcastTx(&types.MsgRegisterValidator{
 			Creator: eachAddr,
 		}, true)
 		if err != nil {
@@ -192,7 +192,15 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 				log.Fatal(err)
 			}
 		}
-		log.Printf("%d. %s Registered as Validator", i, eachAddr)
+		resp, err := eachClient.CosmosClient.WaitForTx(txResp.TxHash, time.Second)
+		if err != nil {
+			log.Fatalf("Error while waiting for the register validator tx to be confirmed: %s", err.Error())
+		}
+		if resp.TxResponse.Code == 0 {
+			log.Printf("%d. %s Successfully Registered as Validator", i, eachAddr)
+		} else {
+			log.Fatalf("Register Validator tx failed with code: %d | Raw Log: %s", resp.TxResponse.Code, resp.TxResponse.RawLog)
+		}
 	}
 
 	out, err := client.Subscribe(context.Background(), "", "tm.event = 'NewBlockHeader'")
