@@ -316,6 +316,8 @@ func listenForStartSubmitGeneralKeyShare(txOut <-chan coretypes.ResultEvent) {
 				}
 				extractedKeyHex := hex.EncodeToString(extractedKeyBinary)
 
+				log.Printf("Derived General Key Share: %s\n", extractedKeyHex)
+
 				resp, err := nowClient.CosmosClient.BroadcastTx(&types.MsgCreateGeneralKeyShare{
 					Creator:       nowClient.CosmosClient.GetAddress(),
 					KeyShare:      extractedKeyHex,
