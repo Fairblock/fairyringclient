@@ -212,13 +212,17 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	txOut2, err := client.Subscribe(context.Background(), "", "tm.event = 'Tx'")
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	defer client.Stop()
 
 	s := bls.NewBLS12381Suite()
 
 	go listenForNewPubKey(txOut)
-	go listenForStartSubmitGeneralKeyShare(txOut)
+	go listenForStartSubmitGeneralKeyShare(txOut2)
 
 	for {
 		select {
