@@ -4,6 +4,7 @@ import (
 	"fairyringclient/pkg/cosmosClient"
 	"fairyringclient/pkg/shareAPIClient"
 	distIBE "github.com/FairBlock/DistributedIBE"
+	bls "github.com/drand/kyber-bls12381"
 	"math"
 )
 
@@ -19,6 +20,24 @@ type ValidatorClients struct {
 	PendingShare            *KeyShare
 	CurrentShareExpiryBlock uint64
 	PendingShareExpiryBlock uint64
+	InvalidShareInARow      uint64
+	Paused                  bool
+}
+
+func (v *ValidatorClients) Pause() {
+	v.Paused = true
+}
+
+func (v *ValidatorClients) Unpause() {
+	v.Paused = false
+}
+
+func (v *ValidatorClients) IncreaseInvalidShareNum() {
+	v.InvalidShareInARow = v.InvalidShareInARow + 1
+}
+
+func (v *ValidatorClients) ResetInvalidShareNum() {
+	v.InvalidShareInARow = 0
 }
 
 func (v *ValidatorClients) SetCurrentShare(share *KeyShare) {
@@ -58,4 +77,11 @@ func (v *ValidatorClients) SetupShareClient(
 	}
 
 	return result.TxHash, nil
+}
+
+func (v *ValidatorClients) VerifyShare() bool {
+	s := bls.NewBLS12381Suite()
+	_ = distIBE.Extract(s, v.CurrentShare.Share.Value, uint32(v.CurrentShare.Index), []byte("testing"))
+	return false
+	//distIBE.VerifyShare(s)
 }

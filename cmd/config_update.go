@@ -24,6 +24,7 @@ var configUpdateCmd = &cobra.Command{
 		chainProtocol, _ := cmd.Flags().GetString("protocol")
 		chainGrpcPort, _ := cmd.Flags().GetUint64("grpc-port")
 		chainPort, _ := cmd.Flags().GetUint64("port")
+		pauseThreshold, _ := cmd.Flags().GetUint64("pause-threshold")
 
 		cfg.FairyRingNode = config.Node{
 			Protocol: chainProtocol,
@@ -33,6 +34,8 @@ var configUpdateCmd = &cobra.Command{
 			Denom:    chainDenom,
 			ChainID:  chainID,
 		}
+
+		cfg.InvalidSharePauseThreshold = pauseThreshold
 
 		if err = cfg.SaveConfig(); err != nil {
 			fmt.Printf("Error saving updated config to system: %s\n", err.Error())
@@ -56,4 +59,5 @@ func init() {
 	configUpdateCmd.Flags().String("ip", cfg.FairyRingNode.IP, "Update config node ip address")
 	configUpdateCmd.Flags().Uint64("port", cfg.FairyRingNode.Port, "Update config node port")
 	configUpdateCmd.Flags().String("protocol", cfg.FairyRingNode.Protocol, "Update config node protocol")
+	configUpdateCmd.Flags().Uint64("pause-threshold", cfg.InvalidSharePauseThreshold, "Update the threshold of when the client pause if number of invalid share in a row reaches threshold")
 }

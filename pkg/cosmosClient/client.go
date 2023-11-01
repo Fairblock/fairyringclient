@@ -5,6 +5,7 @@ import (
 	"cosmossdk.io/math"
 	"encoding/hex"
 	"fairyring/app"
+	keysharetypes "fairyring/x/keyshare/types"
 	"fairyring/x/pep/types"
 	clienttx "github.com/cosmos/cosmos-sdk/client/tx"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
@@ -28,16 +29,17 @@ const (
 )
 
 type CosmosClient struct {
-	authClient      authtypes.QueryClient
-	txClient        tx.ServiceClient
-	grpcConn        grpc.ClientConn
-	bankQueryClient banktypes.QueryClient
-	pepQueryClient  types.QueryClient
-	privateKey      secp256k1.PrivKey
-	publicKey       cryptotypes.PubKey
-	account         authtypes.BaseAccount
-	accAddress      cosmostypes.AccAddress
-	chainID         string
+	authClient          authtypes.QueryClient
+	txClient            tx.ServiceClient
+	grpcConn            grpc.ClientConn
+	bankQueryClient     banktypes.QueryClient
+	pepQueryClient      types.QueryClient
+	keyshareQueryClient keysharetypes.QueryClient
+	privateKey          secp256k1.PrivKey
+	publicKey           cryptotypes.PubKey
+	account             authtypes.BaseAccount
+	accAddress          cosmostypes.AccAddress
+	chainID             string
 }
 
 func PrivateKeyToAccAddress(privateKeyHex string) (cosmostypes.AccAddress, error) {
@@ -67,6 +69,7 @@ func NewCosmosClient(
 	authClient := authtypes.NewQueryClient(grpcConn)
 	bankClient := banktypes.NewQueryClient(grpcConn)
 	pepeClient := types.NewQueryClient(grpcConn)
+	keyshareClient := keysharetypes.NewQueryClient(grpcConn)
 
 	keyBytes, err := hex.DecodeString(privateKeyHex)
 	if err != nil {
@@ -103,17 +106,29 @@ func NewCosmosClient(
 	}
 
 	return &CosmosClient{
-		bankQueryClient: bankClient,
-		authClient:      authClient,
-		txClient:        tx.NewServiceClient(grpcConn),
-		pepQueryClient:  pepeClient,
-		grpcConn:        *grpcConn,
-		privateKey:      privateKey,
-		account:         baseAccount,
-		accAddress:      accAddr,
-		publicKey:       pubKey,
-		chainID:         chainID,
+		bankQueryClient:     bankClient,
+		authClient:          authClient,
+		txClient:            tx.NewServiceClient(grpcConn),
+		pepQueryClient:      pepeClient,
+		keyshareQueryClient: keyshareClient,
+		grpcConn:            *grpcConn,
+		privateKey:          privateKey,
+		account:             baseAccount,
+		accAddress:          accAddr,
+		publicKey:           pubKey,
+		chainID:             chainID,
 	}, nil
+}
+
+func (c *CosmosClient) GetActiveCommitments() (*keysharetypes.QueryPubKeyResponse, error) {
+	resp, err := c.keyshareQueryClient.PubKey(
+		context.Background(),
+		&keysharetypes.QueryPubKeyRequest{},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
 func (c *CosmosClient) GetActivePubKey() (*types.QueryPubKeyResponse, error) {

@@ -21,6 +21,8 @@ import (
 
 	tmclient "github.com/cometbft/cometbft/rpc/client/http"
 	tmtypes "github.com/cometbft/cometbft/types"
+
+	abciTypes "github.com/cometbft/cometbft/abci/types"
 )
 
 var (
@@ -151,6 +153,8 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 		}
 	}
 
+	PauseThreshold := cfg.InvalidSharePauseThreshold
+
 	client, err := tmclient.New(
 		fmt.Sprintf(
 			"%s://%s:%d",
@@ -225,7 +229,16 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 						validatorCosmosClients[nowI].ActivatePendingShare()
 						log.Printf("[%d] Active share updated...\n", nowI)
 						log.Printf("[%d] New Share: %v\n", nowI, validatorCosmosClients[nowI].CurrentShare)
+						nowEach.Unpause()
+						nowEach.ResetInvalidShareNum()
+						log.Printf("[%d] Client Unpaused, current invalid share count: %d...\n", nowI, nowEach.InvalidShareInARow)
 					}
+
+					if nowEach.Paused {
+						log.Printf("[%d] Client paused, skip submitting keyshare for height %s, Waiting until next round...\n", nowI, processHeightStr)
+						return
+					}
+
 					currentShare := validatorCosmosClients[nowI].CurrentShare
 
 					extractedKey := distIBE.Extract(s, currentShare.Share.Value, uint32(currentShare.Index), []byte(processHeightStr))
@@ -242,6 +255,7 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 							KeyShareIndex: currentShare.Index,
 							BlockHeight:   processHeight,
 						}, true)
+
 						if err != nil {
 							log.Printf("[%d] Submit KeyShare for Height %s ERROR: %s\n", nowI, processHeightStr, err.Error())
 						}
@@ -250,6 +264,19 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 							log.Printf("[%d] KeyShare for Height %s Failed: %s\n", nowI, processHeightStr, err.Error())
 							return
 						}
+
+						if hasCoinSpentEvent(txResp.TxResponse.Events) {
+							nowEach.IncreaseInvalidShareNum()
+							log.Printf("[%d] KeyShare for Height %s is INVALID, Got Slashed, Current number invalid share in a row: %d\n", nowI, processHeightStr, nowEach.InvalidShareInARow)
+
+							if nowEach.InvalidShareInARow >= PauseThreshold {
+								nowEach.Pause()
+								log.Printf("[%d] Client paused due to number of invalid share in a row '%d' reaches threshold '%d', Waiting until next round...\n", nowI, nowEach.InvalidShareInARow, PauseThreshold)
+							}
+
+							return
+						}
+
 						if txResp.TxResponse.Code != 0 {
 							log.Printf("[%d] KeyShare for Height %s Failed: %s\n", nowI, processHeightStr, txResp.TxResponse.RawLog)
 							return
@@ -261,6 +288,15 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 			}
 		}
 	}
+}
+
+func hasCoinSpentEvent(e []abciTypes.Event) bool {
+	for _, eachEvent := range e {
+		if eachEvent.Type == "coin_spent" {
+			return true
+		}
+	}
+	return false
 }
 
 func listenForNewPubKey(txOut <-chan coretypes.ResultEvent) {

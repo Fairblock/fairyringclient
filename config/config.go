@@ -12,11 +12,12 @@ import (
 )
 
 const (
-	DefaultFolderName    = ".fairyringclient"
-	DefaultKeyFolderName = DefaultFolderName + "/keys"
-	DefaultChainID       = "fairytest-2"
-	DefaultDenom         = "ufairy"
-	DefaultShareAPIUrl   = "https://7d3q6i0uk2.execute-api.us-east-1.amazonaws.com"
+	DefaultPauseThreshold = 5
+	DefaultFolderName     = ".fairyringclient"
+	DefaultKeyFolderName  = DefaultFolderName + "/keys"
+	DefaultChainID        = "fairytest-2"
+	DefaultDenom          = "ufairy"
+	DefaultShareAPIUrl    = "https://7d3q6i0uk2.execute-api.us-east-1.amazonaws.com"
 )
 
 type Node struct {
@@ -29,12 +30,13 @@ type Node struct {
 }
 
 type Config struct {
-	FairyRingNode     Node
-	PrivateKeys       []string
-	ShareAPIUrl       string
-	IsManager         bool
-	TotalValidatorNum uint64
-	MasterPrivateKey  string
+	FairyRingNode              Node
+	PrivateKeys                []string
+	ShareAPIUrl                string
+	IsManager                  bool
+	TotalValidatorNum          uint64
+	MasterPrivateKey           string
+	InvalidSharePauseThreshold uint64
 }
 
 func ReadConfigFromFile() (*Config, error) {
@@ -183,11 +185,12 @@ func DefaultConfig(withCosmosKey bool) Config {
 			Denom:    DefaultDenom,
 			ChainID:  DefaultChainID,
 		},
-		PrivateKeys:       privateKeys,
-		ShareAPIUrl:       DefaultShareAPIUrl,
-		IsManager:         false,
-		TotalValidatorNum: 0,
-		MasterPrivateKey:  "",
+		PrivateKeys:                privateKeys,
+		ShareAPIUrl:                DefaultShareAPIUrl,
+		IsManager:                  false,
+		TotalValidatorNum:          0,
+		MasterPrivateKey:           "",
+		InvalidSharePauseThreshold: DefaultPauseThreshold,
 	}
 }
 
@@ -202,6 +205,8 @@ func updateConfig(c Config) {
 	viper.Set("ShareAPIUrl", c.ShareAPIUrl)
 	viper.Set("PrivateKeys", c.PrivateKeys)
 	viper.Set("IsManager", c.IsManager)
+
+	viper.Set("InvalidSharePauseThreshold", c.InvalidSharePauseThreshold)
 }
 
 func setInitialConfig(c Config) {
@@ -215,4 +220,6 @@ func setInitialConfig(c Config) {
 	viper.SetDefault("ShareAPIUrl", c.ShareAPIUrl)
 	viper.SetDefault("PrivateKeys", c.PrivateKeys)
 	viper.SetDefault("IsManager", c.IsManager)
+
+	viper.SetDefault("InvalidSharePauseThreshold", c.InvalidSharePauseThreshold)
 }
