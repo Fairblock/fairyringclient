@@ -229,12 +229,12 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 						validatorCosmosClients[nowI].ActivatePendingShare()
 						log.Printf("[%d] Active share updated...\n", nowI)
 						log.Printf("[%d] New Share: %v\n", nowI, validatorCosmosClients[nowI].CurrentShare)
-						nowEach.Unpause()
-						nowEach.ResetInvalidShareNum()
+						validatorCosmosClients[nowI].Unpause()
+						validatorCosmosClients[nowI].ResetInvalidShareNum()
 						log.Printf("[%d] Client Unpaused, current invalid share count: %d...\n", nowI, nowEach.InvalidShareInARow)
 					}
 
-					if nowEach.Paused {
+					if validatorCosmosClients[nowI].Paused {
 						log.Printf("[%d] Client paused, skip submitting keyshare for height %s, Waiting until next round...\n", nowI, processHeightStr)
 						return
 					}
@@ -266,11 +266,11 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 						}
 
 						if hasCoinSpentEvent(txResp.TxResponse.Events) {
-							nowEach.IncreaseInvalidShareNum()
+							validatorCosmosClients[nowI].IncreaseInvalidShareNum()
 							log.Printf("[%d] KeyShare for Height %s is INVALID, Got Slashed, Current number invalid share in a row: %d\n", nowI, processHeightStr, nowEach.InvalidShareInARow)
 
 							if nowEach.InvalidShareInARow >= PauseThreshold {
-								nowEach.Pause()
+								validatorCosmosClients[nowI].Pause()
 								log.Printf("[%d] Client paused due to number of invalid share in a row '%d' reaches threshold '%d', Waiting until next round...\n", nowI, nowEach.InvalidShareInARow, PauseThreshold)
 							}
 
