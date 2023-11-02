@@ -104,7 +104,7 @@ func (v *ValidatorClients) VerifyShare(commitments *types.QueryCommitmentsRespon
 
 	extracted := distIBE.Extract(s, targetShare.Share.Value, uint32(targetShare.Index), []byte("verifying"))
 
-	newByteCommitment, err := hex.DecodeString(targetCommitments[targetShare.Index])
+	newByteCommitment, err := hex.DecodeString(targetCommitments[targetShare.Index-1])
 	if err != nil {
 		return false, err
 	}
