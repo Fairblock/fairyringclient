@@ -157,6 +157,8 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 			log.Fatal("Error getting commitments:", err)
 		}
 
+		log.Printf("[%d] Verifying Current Key Share...", index)
+
 		valid, err := validatorCosmosClients[index].VerifyShare(commits, false)
 		if err != nil {
 			log.Fatal("Error verifying active key share:", err)
@@ -165,7 +167,10 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 			log.Fatal("active key share is invalid:", err)
 		}
 
+		log.Printf("[%d] Current Key Share is valid !", index)
+
 		if validatorCosmosClients[index].PendingShare != nil && commits.QueuedCommitments != nil {
+			log.Printf("[%d] Verifying Pending Key Share...", index)
 			valid, err := validatorCosmosClients[index].VerifyShare(commits, true)
 			if err != nil {
 				log.Fatal("Error verifying queued key share:", err)
@@ -173,6 +178,7 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 			if !valid {
 				log.Fatal("queued key share is invalid:", err)
 			}
+			log.Printf("[%d] Pending Key Share is valid !", index)
 		}
 
 	}
