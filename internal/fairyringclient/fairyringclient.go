@@ -151,6 +151,30 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 				validatorCosmosClients[index].SetPendingShareExpiryBlock(pubKeys.QueuedPubKey.Expiry)
 			}
 		}
+
+		commits, err := validatorCosmosClients[index].CosmosClient.GetCommitments()
+		if err != nil {
+			log.Fatal("Error getting commitments:", err)
+		}
+
+		valid, err := validatorCosmosClients[index].VerifyShare(commits, false)
+		if err != nil {
+			log.Fatal("Error verifying active key share:", err)
+		}
+		if !valid {
+			log.Fatal("active key share is invalid:", err)
+		}
+
+		if validatorCosmosClients[index].PendingShare != nil && commits.QueuedCommitments != nil {
+			valid, err := validatorCosmosClients[index].VerifyShare(commits, true)
+			if err != nil {
+				log.Fatal("Error verifying queued key share:", err)
+			}
+			if !valid {
+				log.Fatal("queued key share is invalid:", err)
+			}
+		}
+
 	}
 
 	PauseThreshold := cfg.InvalidSharePauseThreshold

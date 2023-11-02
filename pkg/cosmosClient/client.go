@@ -120,10 +120,10 @@ func NewCosmosClient(
 	}, nil
 }
 
-func (c *CosmosClient) GetActiveCommitments() (*keysharetypes.QueryPubKeyResponse, error) {
-	resp, err := c.keyshareQueryClient.PubKey(
+func (c *CosmosClient) GetCommitments() (*keysharetypes.QueryCommitmentsResponse, error) {
+	resp, err := c.keyshareQueryClient.Commitments(
 		context.Background(),
-		&keysharetypes.QueryPubKeyRequest{},
+		&keysharetypes.QueryCommitmentsRequest{},
 	)
 	if err != nil {
 		return nil, err
