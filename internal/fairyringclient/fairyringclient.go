@@ -164,7 +164,8 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 			log.Fatal("Error verifying active key share:", err)
 		}
 		if !valid {
-			log.Fatal("active key share is invalid:", err)
+			log.Println("Active key share is invalid, Pausing the client...")
+			validatorCosmosClients[index].Pause()
 		}
 
 		log.Printf("[%d] Current Key Share is valid !", index)
@@ -176,7 +177,7 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 				log.Fatal("Error verifying queued key share:", err)
 			}
 			if !valid {
-				log.Fatal("queued key share is invalid:", err)
+				log.Println("Queued key share is invalid, error")
 			}
 			log.Printf("[%d] Pending Key Share is valid !", index)
 		}
@@ -259,9 +260,24 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 						validatorCosmosClients[nowI].ActivatePendingShare()
 						log.Printf("[%d] Active share updated...\n", nowI)
 						log.Printf("[%d] New Share: %v\n", nowI, validatorCosmosClients[nowI].CurrentShare)
-						validatorCosmosClients[nowI].Unpause()
-						validatorCosmosClients[nowI].ResetInvalidShareNum()
-						log.Printf("[%d] Client Unpaused, current invalid share count: %d...\n", nowI, nowEach.InvalidShareInARow)
+
+						commits, err := validatorCosmosClients[nowI].CosmosClient.GetCommitments()
+						if err != nil {
+							log.Fatal("Error getting commitments in switching key share:", err)
+						}
+
+						valid, err := validatorCosmosClients[nowI].VerifyShare(commits, false)
+						if err != nil {
+							log.Fatal("Error verifying active key share:", err)
+						}
+						if !valid {
+							log.Printf("Active key share is invalid after switching key share, Pausing the client...\n")
+							validatorCosmosClients[nowI].Pause()
+						} else {
+							validatorCosmosClients[nowI].Unpause()
+							validatorCosmosClients[nowI].ResetInvalidShareNum()
+							log.Printf("[%d] Client Unpaused, current invalid share count: %d...\n", nowI, nowEach.InvalidShareInARow)
+						}
 					}
 
 					if validatorCosmosClients[nowI].Paused {
