@@ -164,7 +164,7 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 			log.Fatal("Error verifying active key share:", err)
 		}
 		if !valid {
-			log.Println("Active key share is invalid, Pausing the client...")
+			log.Printf("[%d] Active key share is invalid, Pausing the client...", index)
 			validatorCosmosClients[index].Pause()
 		}
 
@@ -177,7 +177,7 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 				log.Fatal("Error verifying queued key share:", err)
 			}
 			if !valid {
-				log.Println("Queued key share is invalid, error")
+				log.Printf("[%d] Queued key share is invalid...", index)
 			}
 			log.Printf("[%d] Pending Key Share is valid !", index)
 		}
@@ -213,7 +213,7 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 				log.Fatal(err)
 			}
 		}
-		log.Printf("%d. %s Registered as Validator", i, eachAddr)
+		log.Printf("[%d] %s Registered as Validator", i, eachAddr)
 	}
 
 	out, err := client.Subscribe(context.Background(), "", "tm.event = 'NewBlockHeader'")
@@ -271,7 +271,7 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 							log.Fatal("Error verifying active key share:", err)
 						}
 						if !valid {
-							log.Printf("Active key share is invalid after switching key share, Pausing the client...\n")
+							log.Printf("[%d] Active key share is invalid after switching key share, Pausing the client...\n", nowI)
 							validatorCosmosClients[nowI].Pause()
 						} else {
 							validatorCosmosClients[nowI].Unpause()
