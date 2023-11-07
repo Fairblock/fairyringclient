@@ -258,16 +258,12 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 							return
 						}
 
-						validatorCosmosClients[nowI].ActivatePendingShare()
-						log.Printf("[%d] Active share updated...\n", nowI)
-						log.Printf("[%d] New Share: %v\n", nowI, validatorCosmosClients[nowI].CurrentShare)
-
 						commits, err := validatorCosmosClients[nowI].CosmosClient.GetCommitments()
 						if err != nil {
 							log.Fatal("Error getting commitments in switching key share:", err)
 						}
 
-						valid, err := validatorCosmosClients[nowI].VerifyShare(commits, false)
+						valid, err := validatorCosmosClients[nowI].VerifyShare(commits, true)
 						if err != nil {
 							log.Fatal("Error verifying active key share:", err)
 						}
@@ -279,6 +275,10 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 							validatorCosmosClients[nowI].ResetInvalidShareNum()
 							log.Printf("[%d] Client Unpaused, current invalid share count: %d...\n", nowI, nowEach.InvalidShareInARow)
 						}
+
+						validatorCosmosClients[nowI].ActivatePendingShare()
+						log.Printf("[%d] Active share updated...\n", nowI)
+						log.Printf("[%d] New Share: %v\n", nowI, validatorCosmosClients[nowI].CurrentShare)
 					}
 
 					if validatorCosmosClients[nowI].Paused {
