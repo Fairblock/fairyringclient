@@ -8,6 +8,11 @@ import (
 	"fairyringclient/pkg/cosmosClient"
 	"fairyringclient/pkg/shareAPIClient"
 	"fmt"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"net/http"
+
 	"log"
 	"os"
 	"strconv"
@@ -35,6 +40,29 @@ const PrivateKeyFileNameFormat = ".pem"
 var (
 	validatorCosmosClients []ValidatorClients
 	pks                    []string
+)
+
+var (
+	invalidShareSubmitted = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "fairyringclient_invalid_share_submitted",
+		Help: "The total number of invalid key share submitted",
+	})
+	validShareSubmitted = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "fairyringclient_valid_share_submitted",
+		Help: "The total number of valid key share submitted",
+	})
+	failedShareSubmitted = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "fairyringclient_failed_share_submitted",
+		Help: "The total number of key share failed to submit",
+	})
+	currentShareExpiry = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "fairyringclient_current_share_expiry",
+		Help: "The expiry block of current key share",
+	})
+	latestProcessedHeight = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "fairyringclient_latest_processed_height",
+		Help: "The latest height that submitted keyshare",
+	})
 )
 
 func StartFairyRingClient(cfg config.Config, keysDir string) {
@@ -233,6 +261,9 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 
 	go listenForNewPubKey(txOut)
 
+	http.Handle("/metrics", promhttp.Handler())
+	go http.ListenAndServe(":2222", nil)
+
 	for {
 		select {
 		case result := <-out:
@@ -281,6 +312,8 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 						log.Printf("[%d] New Share: %v\n", nowI, validatorCosmosClients[nowI].CurrentShare)
 					}
 
+					defer currentShareExpiry.Set(float64(nowEach.CurrentShareExpiryBlock))
+
 					if validatorCosmosClients[nowI].Paused {
 						log.Printf("[%d] Client paused, skip submitting keyshare for height %s, Waiting until next round...\n", nowI, processHeightStr)
 						return
@@ -316,6 +349,8 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 							validatorCosmosClients[nowI].IncreaseInvalidShareNum()
 							log.Printf("[%d] KeyShare for Height %s is INVALID, Got Slashed, Current number invalid share in a row: %d\n", nowI, processHeightStr, nowEach.InvalidShareInARow)
 
+							defer invalidShareSubmitted.Inc()
+
 							if nowEach.InvalidShareInARow >= PauseThreshold {
 								validatorCosmosClients[nowI].Pause()
 								log.Printf("[%d] Client paused due to number of invalid share in a row '%d' reaches threshold '%d', Waiting until next round...\n", nowI, nowEach.InvalidShareInARow, PauseThreshold)
@@ -326,13 +361,17 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 
 						if txResp.TxResponse.Code != 0 {
 							log.Printf("[%d] KeyShare for Height %s Failed: %s\n", nowI, processHeightStr, txResp.TxResponse.RawLog)
+							defer failedShareSubmitted.Inc()
 							return
 						}
 						log.Printf("[%d] Submit KeyShare for Height %s Confirmed\n", nowI, processHeightStr)
+						defer validShareSubmitted.Inc()
 
 					}()
 				}()
 			}
+
+			latestProcessedHeight.Set(float64(processHeight))
 		}
 	}
 }
