@@ -12,6 +12,7 @@ import (
 )
 
 const (
+	DefaultMetricsPort    = 2222
 	DefaultPauseThreshold = 5
 	DefaultFolderName     = ".fairyringclient"
 	DefaultKeyFolderName  = DefaultFolderName + "/keys"
@@ -37,6 +38,7 @@ type Config struct {
 	TotalValidatorNum          uint64
 	MasterPrivateKey           string
 	InvalidSharePauseThreshold uint64
+	MetricsPort                uint64
 }
 
 func ReadConfigFromFile() (*Config, error) {
@@ -191,6 +193,7 @@ func DefaultConfig(withCosmosKey bool) Config {
 		TotalValidatorNum:          0,
 		MasterPrivateKey:           "",
 		InvalidSharePauseThreshold: DefaultPauseThreshold,
+		MetricsPort:                DefaultMetricsPort,
 	}
 }
 
@@ -207,6 +210,7 @@ func updateConfig(c Config) {
 	viper.Set("IsManager", c.IsManager)
 
 	viper.Set("InvalidSharePauseThreshold", c.InvalidSharePauseThreshold)
+	viper.Set("MetricsPort", c.MetricsPort)
 }
 
 func setInitialConfig(c Config) {
@@ -222,4 +226,5 @@ func setInitialConfig(c Config) {
 	viper.SetDefault("IsManager", c.IsManager)
 
 	viper.SetDefault("InvalidSharePauseThreshold", c.InvalidSharePauseThreshold)
+	viper.SetDefault("MetricsPort", c.MetricsPort)
 }

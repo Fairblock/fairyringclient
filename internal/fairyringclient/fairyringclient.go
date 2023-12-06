@@ -262,7 +262,7 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 	go listenForNewPubKey(txOut)
 
 	http.Handle("/metrics", promhttp.Handler())
-	go http.ListenAndServe(":2222", nil)
+	go http.ListenAndServe(fmt.Sprintf(":%d", cfg.MetricsPort), nil)
 
 	for {
 		select {
