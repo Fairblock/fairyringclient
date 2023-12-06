@@ -25,6 +25,7 @@ var configUpdateCmd = &cobra.Command{
 		chainGrpcPort, _ := cmd.Flags().GetUint64("grpc-port")
 		chainPort, _ := cmd.Flags().GetUint64("port")
 		pauseThreshold, _ := cmd.Flags().GetUint64("pause-threshold")
+		metricsPort, _ := cmd.Flags().GetUint64("metrics-port")
 
 		cfg.FairyRingNode = config.Node{
 			Protocol: chainProtocol,
@@ -36,6 +37,7 @@ var configUpdateCmd = &cobra.Command{
 		}
 
 		cfg.InvalidSharePauseThreshold = pauseThreshold
+		cfg.MetricsPort = metricsPort
 
 		if err = cfg.SaveConfig(); err != nil {
 			fmt.Printf("Error saving updated config to system: %s\n", err.Error())
@@ -60,4 +62,5 @@ func init() {
 	configUpdateCmd.Flags().Uint64("port", cfg.FairyRingNode.Port, "Update config node port")
 	configUpdateCmd.Flags().String("protocol", cfg.FairyRingNode.Protocol, "Update config node protocol")
 	configUpdateCmd.Flags().Uint64("pause-threshold", cfg.InvalidSharePauseThreshold, "Update the threshold of when the client pause if number of invalid share in a row reaches threshold")
+	configUpdateCmd.Flags().Uint64("metrics-port", cfg.MetricsPort, "Update the port of metrics listen to")
 }
