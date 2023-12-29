@@ -16,7 +16,7 @@ If you would like to have the executable in `GOPATH`
 go install
 ```
 
-## Upgrading from the old fairyringclient to v0.1.1
+## Upgrading from the old fairyringclient to v0.2.0
 
 ### Initializing the config
 
@@ -58,8 +58,10 @@ Here is an example output of the command:
 Using config file: /Users/fairblock/.fairyringclient/config.yml
 GRPC Endpoint: 192.168.1.100:9090
 FairyRing Node Endpoint: http://192.168.1.100:26666
-Chain ID: fairytest-2
+Chain ID: fairytest-3
 Chain Denom: ufairy
+InvalidSharePauseThreshold: 5
+MetricsPort: 2222
 Share API Url: https://7d3q6i0uk2.execute-api.us-east-1.amazonaws.com
 ```
 
@@ -197,8 +199,10 @@ Here is an example output of the command:
 Using config file: /Users/fairblock/.fairyringclient/config.yml
 GRPC Endpoint: 192.168.1.100:9090
 FairyRing Node Endpoint: http://192.168.1.100:26666
-Chain ID: fairytest-2
+Chain ID: fairytest-3
 Chain Denom: ufairy
+InvalidSharePauseThreshold: 5
+MetricsPort: 2222
 Share API Url: https://7d3q6i0uk2.execute-api.us-east-1.amazonaws.com
 ```
 
