@@ -22,7 +22,9 @@ var configShowCmd = &cobra.Command{
 FairyRing Node Endpoint: %s
 Chain ID: %s
 Chain Denom: %s
-`, cfg.GetGRPCEndpoint(), cfg.GetFairyRingNodeURI(), cfg.FairyRingNode.ChainID, cfg.FairyRingNode.Denom)
+InvalidSharePauseThreshold: %d
+MetricsPort: %d
+`, cfg.GetGRPCEndpoint(), cfg.GetFairyRingNodeURI(), cfg.FairyRingNode.ChainID, cfg.FairyRingNode.Denom, cfg.InvalidSharePauseThreshold, cfg.MetricsPort)
 
 		fmt.Printf("Share API Url: %s\n", cfg.ShareAPIUrl)
 	},
