@@ -1,9 +1,14 @@
 package fairyringclient
 
 import (
+	"encoding/hex"
+	"errors"
+	"fairyring/x/keyshare/types"
 	"fairyringclient/pkg/cosmosClient"
 	"fairyringclient/pkg/shareAPIClient"
 	distIBE "github.com/FairBlock/DistributedIBE"
+	"github.com/drand/kyber"
+	bls "github.com/drand/kyber-bls12381"
 	"math"
 )
 
@@ -19,6 +24,24 @@ type ValidatorClients struct {
 	PendingShare            *KeyShare
 	CurrentShareExpiryBlock uint64
 	PendingShareExpiryBlock uint64
+	InvalidShareInARow      uint64
+	Paused                  bool
+}
+
+func (v *ValidatorClients) Pause() {
+	v.Paused = true
+}
+
+func (v *ValidatorClients) Unpause() {
+	v.Paused = false
+}
+
+func (v *ValidatorClients) IncreaseInvalidShareNum() {
+	v.InvalidShareInARow = v.InvalidShareInARow + 1
+}
+
+func (v *ValidatorClients) ResetInvalidShareNum() {
+	v.InvalidShareInARow = 0
 }
 
 func (v *ValidatorClients) SetCurrentShare(share *KeyShare) {
@@ -58,4 +81,51 @@ func (v *ValidatorClients) SetupShareClient(
 	}
 
 	return result.TxHash, nil
+}
+
+func (v *ValidatorClients) VerifyShare(commitments *types.QueryCommitmentsResponse, verifyPendingShare bool) (bool, error) {
+	s := bls.NewBLS12381Suite()
+
+	targetShare := v.CurrentShare
+	if verifyPendingShare {
+		if v.PendingShare == nil {
+			return false, errors.New("verify pending share but pending share not found")
+		}
+		targetShare = v.PendingShare
+	}
+
+	targetCommitments := commitments.ActiveCommitments.Commitments
+	if verifyPendingShare {
+		if commitments.QueuedCommitments == nil {
+			return false, errors.New("verify pending share but queued commitment not found")
+		}
+		targetCommitments = commitments.QueuedCommitments.Commitments
+	}
+
+	extracted := distIBE.Extract(s, targetShare.Share.Value, uint32(targetShare.Index), []byte("verifying"))
+
+	newByteCommitment, err := hex.DecodeString(targetCommitments[targetShare.Index-1])
+	if err != nil {
+		return false, err
+	}
+
+	newCommitmentPoint := s.G1().Point()
+	err = newCommitmentPoint.UnmarshalBinary(newByteCommitment)
+	if err != nil {
+		return false, err
+	}
+
+	newCommitment := distIBE.Commitment{
+		SP:    newCommitmentPoint,
+		Index: uint32(targetShare.Index),
+	}
+
+	hG2, ok := s.G2().Point().(kyber.HashablePoint)
+	if !ok {
+		return false, errors.New("unable to create hashable G2 point")
+	}
+
+	Qid := hG2.Hash([]byte("verifying"))
+
+	return distIBE.VerifyShare(s, newCommitment, extracted, Qid), nil
 }

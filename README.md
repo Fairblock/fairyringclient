@@ -16,124 +16,266 @@ If you would like to have the executable in `GOPATH`
 go install
 ```
 
-## Setting up the client
+## Upgrading from the old fairyringclient to v0.2.0
 
-### Init the config file & keys directory
+### Initializing the config
 
-This command will create a config directory under your `$HOME` directory: `$HOME/.fairyringclient`.
-It will also create the RSA key for interacting with the ShareAPI for you automatically,
-you can disable this by adding `--no-rsa-key` flag.
+Initialize the FairyRing Client by the following command,
+It will create a config directory under your `$HOME` directory: `$HOME/.fairyringclient`.
 
-If you would like it to generate a new cosmos private key for you, you can add `--with-cosmos-key` flag
+Since you already have a RSA key from last version of FairyRing Client, 
+you can use that key instead of creating a new one automatically, so add the `--no-rsa-key` flag to the init command.
+
+```bash
+fairyringclient config init --no-rsa-key
+```
+
+After initializing the config directory, 
+If your node is not running on localhost / the GRPC port is not `9090` / the tendermint port is not `26657`,
+Run the following command to update the config:
+
+```bash
+fairyringclient config --ip 'node-ip' --port 'tendermint port' --grpc-port 'grpc port'
+```
+
+For example if your node endpoint is on `192.168.1.100` and the tendermint port is updated to `26666`,
+then you can run the following command to update the ip & port:
+
+```bash
+fairyringclient config update --ip "192.168.1.100" --port 26666
+```
+
+After upgrading the config, run the following command to show your config to make sure the config is correct:
+
+```bash
+fairyringclient config show
+```
+
+Here is an example output of the command:
+
+```
+> fairyringclient config show
+Using config file: /Users/fairblock/.fairyringclient/config.yml
+GRPC Endpoint: 192.168.1.100:9090
+FairyRing Node Endpoint: http://192.168.1.100:26666
+Chain ID: fairytest-3
+Chain Denom: ufairy
+InvalidSharePauseThreshold: 5
+MetricsPort: 2222
+Share API Url: https://7d3q6i0uk2.execute-api.us-east-1.amazonaws.com
+```
+
+---
+
+### Adding the RSA Key
+
+Once the config is done, we can add the RSA to the new client by the following command
+
+```bash
+fairyringclient keys rsa add 'path to the rsa secret key'
+```
+
+The RSA secret key should be located under the `fairyringclient/keys/` directory.
+For example, If I am already under `fairyringclient` directory, I can use the following command to add the RSA key
+
+**Make sure is the path to the secret key `sk1.pem` NOT the public key `pk1.pem`**
+
+```bash
+> pwd
+/Users/fairblock/fairyringclient
+
+> ls
+README.md cmd       config    go.mod    go.sum    internal  keys      main.go   pkg
+
+> fairyringclient keys rsa add 'keys/sk1.pem'
+Using config file: /Users/fairblock/.fairyringclient/config.yml
+RSA Private Key added as /Users/fairblock/.fairyringclient/keys/sk1.pem
+RSA Public Key added as /Users/fairblock/.fairyringclient/keys/pk1.pem
+RSA Keys added successfully
+```
+
+After adding the RSA key, you should be able to see it by the following command:
+
+```bash
+> fairyringclient keys rsa list
+Using config file: /Users/fairblock/.fairyringclient/config.yml
+Found total 1 RSA private keys in keys directory /Users/fairblock/.fairyringclient/keys
+[0] sk1.pem
+```
+
+**If you would like to delete the RSA key added to the client, you would need to delete it manually under the `keys` directory.
+The default path is `$HOME/.fairyringclient/keys`.**
+
+**Once the key is added, is not supposed to be deleted. Therefore, we didn't add the command for deleting the key.**
+
+---
+
+### Adding the Cosmos key
+
+You can add the key by the following command:
+
+```bash
+fairyringclient keys cosmos add "private key in hex"
+```
+
+Your cosmos key should be located inside the `.env` file under `VALIDATOR_PRIVATE_KEYS=` of last FairyRing Client.
+
+Assuming you are using the same validator address in the new testnet `fairytest-2`, you can add that private key in the `.env` file to the client.
+
+Here is an example output:
+
+```bash
+> fairyringclient keys cosmos add f5c691d4b53ec8c3a3ad35e88525f9b8f33d307b3414c93f1b856265409a3a04
+Using config file: /Users/fairblock/.fairyringclient/config.yml
+Successfully added cosmos private key to config!
+```
+
+Then you can see all the private key added to the client by following command:
+
+```bash
+> fairyringclient keys cosmos list
+Using config file: /Users/fairblock/.fairyringclient/config.yml
+Found total 1 private keys in config file
+[0] f5c691d4b53ec8c3a3ad35e88525f9b8f33d307b3414c93f1b856265409a3a04
+```
+
+**The [0] at the beginning of the key is the index of your key, which is used to delete the key**
+
+If you would like to remove the private key:
+
+```bash
+fairyringclient keys cosmos remove "private key index"
+```
+
+```bash
+> fairyringclient keys cosmos remove 0
+Using config file: /Users/fairblock/.fairyringclient/config.yml
+Successfully removed specified cosmos private key in config!
+
+> fairyringclient keys cosmos list
+Using config file: /Users/fairblock/.fairyringclient/config.yml
+Found total 0 private keys in config file
+```
+
+---
+
+## Setting up the client for the first time
+
+
+### Initializing the config
+
+Initialize the FairyRing Client by the following command,
+It will create a config directory under your `$HOME` directory: `$HOME/.fairyringclient`.
 
 ```bash
 fairyringclient config init
 ```
 
-### Showing the config
+After initializing the config directory,
+If your node is not running on localhost / the GRPC port is not `9090` / the tendermint port is not `26657`,
+Run the following command to update the config:
 
-After initializing the config, you will be able to see the config detail by:
+```bash
+fairyringclient config --ip 'node-ip' --port 'tendermint port' --grpc-port 'grpc port'
+```
+
+For example if your node endpoint is on `192.168.1.100` and the tendermint port is updated to `26666`,
+then you can run the following command to update the ip & port:
+
+```bash
+fairyringclient config update --ip "192.168.1.100" --port 26666
+```
+
+After upgrading the config, run the following command to show your config to make sure the config is correct:
+
 ```bash
 fairyringclient config show
 ```
 
-### Updating the config
+Here is an example output of the command:
 
-You can update the config by editing the config file in `$HOME/.fairyringclient/config.yml` or you can use the following command:
-
-```bash
-fairyringclient config update
+```
+> fairyringclient config show
+Using config file: /Users/fairblock/.fairyringclient/config.yml
+GRPC Endpoint: 192.168.1.100:9090
+FairyRing Node Endpoint: http://192.168.1.100:26666
+Chain ID: fairytest-3
+Chain Denom: ufairy
+InvalidSharePauseThreshold: 5
+MetricsPort: 2222
+Share API Url: https://7d3q6i0uk2.execute-api.us-east-1.amazonaws.com
 ```
 
-You can only update the node config with this command, if you would like to update RSA Keys / Cosmos Keys, please refer to [this section]()
+---
 
-Here are the available flags for updating the config:
+### Submitting the RSA Key
 
-```bash
---api-url string    Update config API URL (default "https://7d3q6i0uk2.execute-api.us-east-1.amazonaws.com")
---chain-id string   Update config chain id (default "fairytest-1")
---denom string      Update config denom (default "ufairy")
---grpc-port uint    Update config grpc-port (default 9090)
---ip string         Update config node ip address (default "127.0.0.1")
---port uint         Update config node port (default 26657)
---protocol string   Update config node protocol (default "http")
-```
+Once the config is done, you can submit the RSA public key generated by the client to us. 
 
-#### Example on updating config
+You can get the public in the following path (assuming you didn't update the client config path)
 
-Lets say you would like to update the chain id to `"fairyring"` and the denom to `"fairy"`, you can execute the following command:
+`$HOME/.fairyringclient/keys`
 
-```bash
-fairyringclient config update --chain-id fairyring --denom fairy
-```
+The public key file is named `pk1.pem`
 
-### Manging RSA Keys & Cosmos Account Private Keys
+Submit the `pk1.pem` via [This Form](https://forms.gle/NC65NkDsjsExaxrA9) 
 
-#### RSA Keys
+---
 
-##### Adding RSA Keys
+### Adding the Cosmos key
 
-You can add RSA Key to the client by using
+You can add your validator private key by the following command:
 
 ```bash
-fairyringclient keys rsa add [path-to-rsa-private-key]
+fairyringclient keys cosmos add "private key in hex"
 ```
 
-This command will automatically derive the public key, rename the key file and add them to the keys directory `$HOME/.fairyringclient/keys` for you
+**The private key should be the validator address that is staking on fairyring chain**
 
-##### Listing RSA Keys
-
-You can list all the RSA Key in the keys directory by
+Example: 
 
 ```bash
-fairyringclient keys rsa list
+> fairyringclient keys cosmos add f5c691d4b53ec8c3a3ad35e88525f9b8f33d307b3414c93f1b856265409a3a04
+Using config file: /Users/fairblock/.fairyringclient/config.yml
+Successfully added cosmos private key to config!
 ```
 
-#### Cosmos Account Keys
-
-##### Adding Cosmos Account Private Key
-
-You can add a private key to the client by
+Then you can see all the private key added to the client by following command:
 
 ```bash
-fairyringclient keys cosmos add [private-key-in-hex]
+> fairyringclient keys cosmos list
+Using config file: /Users/fairblock/.fairyringclient/config.yml
+Found total 1 private keys in config file
+[0] f5c691d4b53ec8c3a3ad35e88525f9b8f33d307b3414c93f1b856265409a3a04
 ```
 
-Or you can add the private key to the `config.yml` manually under the `privatekeys` section:
+**The [0] at the beginning of the key is the index of your key, which is used to delete the key**
+
+If you would like to remove the private key:
 
 ```bash
-privatekeys:
-    - private_key_1
-    - private_key_2
+fairyringclient keys cosmos remove "private key index"
 ```
-
-##### Listing all the Cosmos Account Private Key
-
-This command will list all the private keys added to the client config
 
 ```bash
-fairyringclient keys cosmos list
+> fairyringclient keys cosmos remove 0
+Using config file: /Users/fairblock/.fairyringclient/config.yml
+Successfully removed specified cosmos private key in config!
+
+> fairyringclient keys cosmos list
+Using config file: /Users/fairblock/.fairyringclient/config.yml
+Found total 0 private keys in config file
 ```
 
-##### Removing Cosmos Account Private Key
+---
 
-You can remove a specific private key with this command
-
-```bash
-fairyringclient keys cosmos remove [private_key_index]
-```
-
-You can get the private key index by using the `fairyringclient keys cosmos list` command
-
-**Make sure the account you are using already activated and have enough balance for sending transaction and 
-you have te same number of RSA keys and the number of cosmos private keys**
-
-
-### Address Delegate
+### Address Delegation
 
 You can now delegate another address to submit the key share for you. 
 Your address need to be a validator in the `keyshare` module in order to do this.
-You will also need the private for your validator account set in the client config before running this command
+
+You will also need the private key for your validator account set in the client config before running this command
+
 After delegating, you can remove the validator's private key and add the delegated address private key to the client instead
 
 #### Authorizing an address
@@ -147,6 +289,8 @@ fairyringclient delegate add [address]
 ```bash
 fairyringclient delegate remove [address]
 ```
+
+**Make sure the account you are delegating is already activated and have enough balance for sending transaction**
 
 ## Starting the client
 

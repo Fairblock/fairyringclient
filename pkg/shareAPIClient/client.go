@@ -142,6 +142,8 @@ func (s ShareAPIClient) GetShare(msg string) (*distIBE.Share, uint64, error) {
 		return nil, 0, errors.New(fmt.Sprintf("Get Share Resp is empty, body: %s", parsedResp.Body))
 	}
 
+	log.Printf("Got Encrypted Share: %s\n", parsedGetShareResp.EncShare)
+
 	decryptedShare, err := s.decryptShare(parsedGetShareResp.EncShare)
 	if err != nil {
 		return nil, 0, err
@@ -204,6 +206,8 @@ func (s ShareAPIClient) GetLastShare(msg string) (*distIBE.Share, uint64, error)
 	if len(parsedGetShareResp.EncShare) == 0 && len(parsedGetShareResp.Pk) == 0 {
 		return nil, 0, errors.New(fmt.Sprintf("Get Last Share Resp is empty, body: %s", parsedResp.Body))
 	}
+
+	log.Printf("Got Last Encrypted Share: %s\n", parsedGetShareResp.EncShare)
 
 	decryptedShare, err := s.decryptShare(parsedGetShareResp.EncShare)
 	if err != nil {
