@@ -118,20 +118,7 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 
 		privateKeyIndexNum++
 
-		// share, shareIndex, err := shareClient.GetShare(getNowStr())
-
-		hexShare := "29c861be5016b20f5a4397795e3f086d818b11ad02e0dd8ee28e485988b6cb07"
-		shareByte, _ := hex.DecodeString(hexShare)
-
-		parsedShare := bls.NewKyberScalar()
-		err = parsedShare.UnmarshalBinary(shareByte)
-
-		var shareIndex uint64 = 1
-
-		var share = &distIBE.Share{
-			Index: bls.NewKyberScalar().SetInt64(int64(1)),
-			Value: parsedShare,
-		}
+		share, shareIndex, err := shareClient.GetShare(getNowStr())
 
 		if err != nil {
 			log.Fatal("Error getting share:", err)
