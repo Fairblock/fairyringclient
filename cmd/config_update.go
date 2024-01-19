@@ -4,6 +4,7 @@ import (
 	"fairyringclient/config"
 	"fmt"
 	"github.com/spf13/cobra"
+	"net/url"
 )
 
 // configUpdateCmd represents the config update command
@@ -24,6 +25,7 @@ var configUpdateCmd = &cobra.Command{
 		chainProtocol, _ := cmd.Flags().GetString("protocol")
 		chainGrpcPort, _ := cmd.Flags().GetUint64("grpc-port")
 		chainPort, _ := cmd.Flags().GetUint64("port")
+		apiURL, _ := cmd.Flags().GetString("api-url")
 		pauseThreshold, _ := cmd.Flags().GetUint64("pause-threshold")
 		metricsPort, _ := cmd.Flags().GetUint64("metrics-port")
 
@@ -36,6 +38,13 @@ var configUpdateCmd = &cobra.Command{
 			ChainID:  chainID,
 		}
 
+		_, err = url.ParseRequestURI(apiURL)
+		if err != nil {
+			fmt.Printf("Invalid API URL Provided '%s', Error: %s\n", apiURL, err.Error())
+			return
+		}
+
+		cfg.ShareAPIUrl = apiURL
 		cfg.InvalidSharePauseThreshold = pauseThreshold
 		cfg.MetricsPort = metricsPort
 
@@ -61,6 +70,7 @@ func init() {
 	configUpdateCmd.Flags().String("ip", cfg.FairyRingNode.IP, "Update config node ip address")
 	configUpdateCmd.Flags().Uint64("port", cfg.FairyRingNode.Port, "Update config node port")
 	configUpdateCmd.Flags().String("protocol", cfg.FairyRingNode.Protocol, "Update config node protocol")
+	configUpdateCmd.Flags().String("api-url", cfg.ShareAPIUrl, "Update config API URL")
 	configUpdateCmd.Flags().Uint64("pause-threshold", cfg.InvalidSharePauseThreshold, "Update the threshold of when the client pause if number of invalid share in a row reaches threshold")
 	configUpdateCmd.Flags().Uint64("metrics-port", cfg.MetricsPort, "Update the port of metrics listen to")
 }

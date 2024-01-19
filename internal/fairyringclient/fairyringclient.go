@@ -118,7 +118,21 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 
 		privateKeyIndexNum++
 
-		share, shareIndex, err := shareClient.GetShare(getNowStr())
+		// share, shareIndex, err := shareClient.GetShare(getNowStr())
+
+		hexShare := "29c861be5016b20f5a4397795e3f086d818b11ad02e0dd8ee28e485988b6cb07"
+		shareByte, _ := hex.DecodeString(hexShare)
+
+		parsedShare := bls.NewKyberScalar()
+		err = parsedShare.UnmarshalBinary(shareByte)
+
+		var shareIndex uint64 = 1
+
+		var share = &distIBE.Share{
+			Index: bls.NewKyberScalar().SetInt64(int64(1)),
+			Value: parsedShare,
+		}
+
 		if err != nil {
 			log.Fatal("Error getting share:", err)
 		}
@@ -234,7 +248,7 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 
 	for i, eachClient := range validatorCosmosClients {
 		eachAddr := eachClient.CosmosClient.GetAddress()
-		_, err = eachClient.CosmosClient.BroadcastTx(&types.MsgRegisterValidator{
+		txResp, err := eachClient.CosmosClient.BroadcastTx(&types.MsgRegisterValidator{
 			Creator: eachAddr,
 		}, true)
 		if err != nil {
@@ -242,7 +256,16 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 				log.Fatal(err)
 			}
 		}
-		log.Printf("[%d] %s Registered as Validator", i, eachAddr)
+
+		resp, err := eachClient.CosmosClient.WaitForTx(txResp.TxHash, time.Second)
+		if err != nil {
+			log.Fatalf("Error while waiting for the register validator tx to be confirmed: %s", err.Error())
+		}
+		if resp.TxResponse.Code == 0 {
+			log.Printf("%d. %s Successfully Registered as Validator", i, eachAddr)
+		} else {
+			log.Fatalf("Register Validator tx failed with code: %d | Raw Log: %s", resp.TxResponse.Code, resp.TxResponse.RawLog)
+		}
 	}
 
 	out, err := client.Subscribe(context.Background(), "", "tm.event = 'NewBlockHeader'")
@@ -254,12 +277,17 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	txOut2, err := client.Subscribe(context.Background(), "", "tm.event = 'Tx'")
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	defer client.Stop()
 
 	s := bls.NewBLS12381Suite()
 
 	go listenForNewPubKey(txOut)
+	go listenForStartSubmitGeneralKeyShare(txOut2)
 
 	http.Handle("/metrics", promhttp.Handler())
 	log.Printf("Metrics is listening on port: %d\n", cfg.MetricsPort)
@@ -386,6 +414,63 @@ func hasCoinSpentEvent(e []abciTypes.Event) bool {
 	return false
 }
 
+func listenForStartSubmitGeneralKeyShare(txOut <-chan coretypes.ResultEvent) {
+	for {
+		select {
+		case result := <-txOut:
+			id, found := result.Events["start-send-general-keyshare.start-send-general-keyshare-identity"]
+			if !found {
+				continue
+			}
+
+			if len(id) < 1 {
+				continue
+			}
+
+			identity := id[0]
+
+			log.Printf("Start Submitting General Key Share for identity: %s", identity)
+			s := bls.NewBLS12381Suite()
+			for i, eachClient := range validatorCosmosClients {
+				nowI := i
+				nowClient := eachClient
+
+				currentShare := nowClient.CurrentShare
+
+				extractedKey := distIBE.Extract(s, currentShare.Share.Value, uint32(currentShare.Index), []byte(identity))
+				extractedKeyBinary, err := extractedKey.SK.MarshalBinary()
+				if err != nil {
+					log.Fatal(err)
+				}
+				extractedKeyHex := hex.EncodeToString(extractedKeyBinary)
+
+				log.Printf("Derived General Key Share: %s\n", extractedKeyHex)
+
+				resp, err := nowClient.CosmosClient.BroadcastTx(&types.MsgCreateGeneralKeyShare{
+					Creator:       nowClient.CosmosClient.GetAddress(),
+					KeyShare:      extractedKeyHex,
+					KeyShareIndex: currentShare.Index,
+					IdType:        "private-gov-identity",
+					IdValue:       identity,
+				}, true)
+				if err != nil {
+					log.Printf("[%d] Submit General KeyShare for Identity %s ERROR: %s\n", nowI, identity, err.Error())
+				}
+				txResp, err := nowClient.CosmosClient.WaitForTx(resp.TxHash, time.Second)
+				if err != nil {
+					log.Printf("[%d] General KeyShare for Identity %s Failed: %s\n", nowI, identity, err.Error())
+					return
+				}
+				if txResp.TxResponse.Code != 0 {
+					log.Printf("[%d] General KeyShare for Identity %s Failed: %s\n", nowI, identity, txResp.TxResponse.RawLog)
+					return
+				}
+				log.Printf("[%d] Submit General KeyShare for Identity %s Confirmed\n", nowI, identity)
+			}
+		}
+	}
+}
+
 func listenForNewPubKey(txOut <-chan coretypes.ResultEvent) {
 	for {
 		select {
@@ -411,17 +496,32 @@ func listenForNewPubKey(txOut <-chan coretypes.ResultEvent) {
 			for i, eachClient := range validatorCosmosClients {
 				nowI := i
 				nowClient := eachClient
-				newShare, index, err := nowClient.ShareApiClient.GetShare(getNowStr())
+				log.Printf("nowClient: %d", nowClient.CurrentShare.Index)
+
+				// newShare, index, err := nowClient.ShareApiClient.GetShare(getNowStr())
+				hexShare := "29c861be5016b20f5a4397795e3f086d818b11ad02e0dd8ee28e485988b6cb07"
+				shareByte, _ := hex.DecodeString(hexShare)
+
+				parsedShare := bls.NewKyberScalar()
+				err = parsedShare.UnmarshalBinary(shareByte)
+
+				var shareIndex uint64 = 1
+
+				var share = &distIBE.Share{
+					Index: bls.NewKyberScalar().SetInt64(int64(1)),
+					Value: parsedShare,
+				}
+
 				if err != nil {
 					log.Printf("[%d] Error getting the pending keyshare: %s", nowI, err.Error())
 					return
 				}
 				validatorCosmosClients[nowI].SetPendingShare(&KeyShare{
-					Share: *newShare,
-					Index: index,
+					Share: *share,
+					Index: shareIndex,
 				})
 				validatorCosmosClients[nowI].SetPendingShareExpiryBlock(expiryHeight)
-				log.Printf("Got [%d] Client's New Share: %v | Expires at: %d\n", nowI, newShare.Value, expiryHeight)
+				log.Printf("Got [%d] Client's New Share: %v | Expires at: %d\n", nowI, share.Value, expiryHeight)
 			}
 		}
 	}
