@@ -323,7 +323,7 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 									log.Printf("[%d] Error getting queued public key when trying to get pending keyshare: %s", nowI, err.Error())
 								} else {
 									log.Printf("[%d] Got the active public keys from the chain %v", nowI, pubKey)
-									validatorCosmosClients[nowI].SetPendingShareExpiryBlock(pubKey.QueuedPubKey.Expiry)
+									validatorCosmosClients[nowI].SetPendingShareExpiryBlock(pubKey.ActivePubKey.Expiry)
 								}
 							}
 
@@ -366,8 +366,8 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 								if err != nil {
 									log.Printf("[%d] Error getting active public key: %s", nowI, err.Error())
 								} else {
-									log.Printf("[%d] Pending Share updated.", nowI)
-									validatorCosmosClients[nowI].SetPendingShareExpiryBlock(pubKey.ActivePubKey.Expiry)
+									log.Printf("[%d] Pending Share updated...", nowI)
+									validatorCosmosClients[nowI].SetPendingShareExpiryBlock(pubKey.QueuedPubKey.Expiry)
 								}
 							}
 
