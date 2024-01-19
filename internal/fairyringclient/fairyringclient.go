@@ -302,6 +302,26 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 				nowEach := each
 				go func() {
 					log.Printf("Current Share Expires at: %d | %v", nowEach.CurrentShareExpiryBlock, nowEach.CurrentShare.Share)
+					if nowEach.PendingShare != nil {
+						log.Printf("[%d] Pending Share expires at: %d | %v", nowEach.PendingShareExpiryBlock, nowEach.PendingShare.Share)
+					} else {
+						log.Printf("[%d] Trying to get pending KeyShare...", nowI)
+						newShare, index, err := nowEach.ShareApiClient.GetShare(getNowStr())
+						if err != nil {
+							log.Printf("[%d] Error getting the pending keyshare: %s", nowI, err.Error())
+						} else {
+							validatorCosmosClients[nowI].SetPendingShare(&KeyShare{
+								Share: *newShare,
+								Index: index,
+							})
+							pubKey, err := nowEach.CosmosClient.GetActivePubKey()
+							if err != nil {
+								log.Printf("[%d] Error getting queued public key when trying to get pending keyshare: %s", nowI, err.Error())
+							} else {
+								validatorCosmosClients[nowI].SetPendingShareExpiryBlock(pubKey.QueuedPubKey.Expiry)
+							}
+						}
+					}
 					if nowEach.CurrentShareExpiryBlock != 0 && nowEach.CurrentShareExpiryBlock <= processHeight {
 						log.Printf("[%d] current share expired, trying to switch to the queued one...\n", nowI)
 						if nowEach.PendingShare == nil {
