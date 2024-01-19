@@ -342,7 +342,7 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 						if !valid {
 							log.Printf("[%d] Active key share is invalid after switching key share, Trying to fetch the share again...\n", nowI)
 							successNewShare := false
-							newShare, index, err := nowEach.ShareApiClient.GetLastShare(getNowStr())
+							newShare, index, err := nowEach.ShareApiClient.GetShare(getNowStr())
 							if err != nil {
 								log.Printf("[%d] Error getting share after found out share is invalid: %s", nowI, err.Error())
 							} else {
