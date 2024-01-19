@@ -20,6 +20,7 @@ type KeyShare struct {
 type ValidatorClients struct {
 	CosmosClient            *cosmosClient.CosmosClient
 	ShareApiClient          *shareAPIClient.ShareAPIClient
+	Commitments             *types.QueryCommitmentsResponse
 	CurrentShare            *KeyShare
 	PendingShare            *KeyShare
 	CurrentShareExpiryBlock uint64
@@ -34,6 +35,10 @@ func (v *ValidatorClients) Pause() {
 
 func (v *ValidatorClients) Unpause() {
 	v.Paused = false
+}
+
+func (v *ValidatorClients) SetCommitments(c *types.QueryCommitmentsResponse) {
+	v.Commitments = c
 }
 
 func (v *ValidatorClients) IncreaseInvalidShareNum() {

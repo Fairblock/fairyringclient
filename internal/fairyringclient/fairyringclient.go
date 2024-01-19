@@ -186,6 +186,8 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 			log.Fatal("Error getting commitments:", err)
 		}
 
+		validatorCosmosClients[index].SetCommitments(commits)
+
 		log.Printf("[%d] Verifying Current Key Share...", index)
 
 		valid, err := validatorCosmosClients[index].VerifyShare(commits, false)
@@ -317,10 +319,7 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 							return
 						}
 
-						commits, err := validatorCosmosClients[nowI].CosmosClient.GetCommitments()
-						if err != nil {
-							log.Fatal("Error getting commitments in switching key share:", err)
-						}
+						commits := validatorCosmosClients[nowI].Commitments
 
 						valid, err := validatorCosmosClients[nowI].VerifyShare(commits, true)
 						if err != nil {
@@ -538,6 +537,14 @@ func listenForNewPubKey(txOut <-chan coretypes.ResultEvent) {
 				})
 				validatorCosmosClients[nowI].SetPendingShareExpiryBlock(expiryHeight)
 				log.Printf("Got [%d] Client's New Share: %v | Expires at: %d\n", nowI, newShare.Value, expiryHeight)
+
+				commits, err := validatorCosmosClients[index].CosmosClient.GetCommitments()
+				if err != nil {
+					log.Fatal("Error getting commitments:", err)
+				}
+
+				validatorCosmosClients[index].SetCommitments(commits)
+				log.Printf("[%d] Updated Commitments...", index)
 			}
 		}
 	}
