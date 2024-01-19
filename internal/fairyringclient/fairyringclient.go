@@ -342,10 +342,11 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 						if !valid {
 							log.Printf("[%d] Active key share is invalid after switching key share, Trying to fetch the share again...\n", nowI)
 							successNewShare := false
-							newShare, index, err := nowEach.ShareApiClient.GetShare(getNowStr())
+							newShare, index, err := nowEach.ShareApiClient.GetLastShare(getNowStr())
 							if err != nil {
 								log.Printf("[%d] Error getting share after found out share is invalid: %s", nowI, err.Error())
 							} else {
+								log.Printf("[%d] Got share from API: %v", newShare)
 								validatorCosmosClients[nowI].SetCurrentShare(&KeyShare{
 									Share: *newShare,
 									Index: index,
@@ -365,6 +366,7 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 							}
 
 							if !successNewShare {
+								log.Printf("[%d] New Share is still invalid, pausing the client...", nowI)
 								validatorCosmosClients[nowI].Pause()
 							} else {
 								log.Printf("[%d] Got valid key share from API, continue to submit shares...", nowI)
