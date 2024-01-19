@@ -303,7 +303,7 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 				go func() {
 					log.Printf("Current Share Expires at: %d | %v", nowEach.CurrentShareExpiryBlock, nowEach.CurrentShare.Share)
 					if nowEach.PendingShare != nil {
-						log.Printf("[%d] Pending Share expires at: %d | %v", nowEach.PendingShareExpiryBlock, nowEach.PendingShare.Share)
+						log.Printf("[%d] Pending Share expires at: %d | %v", nowI, nowEach.PendingShareExpiryBlock, nowEach.PendingShare.Share)
 					} else {
 						log.Printf("[%d] Trying to get pending KeyShare...", nowI)
 						newShare, index, err := nowEach.ShareApiClient.GetShare(getNowStr())
