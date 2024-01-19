@@ -340,8 +340,36 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 							log.Fatal("Error verifying active key share:", err)
 						}
 						if !valid {
-							log.Printf("[%d] Active key share is invalid after switching key share, Pausing the client...\n", nowI)
-							validatorCosmosClients[nowI].Pause()
+							log.Printf("[%d] Active key share is invalid after switching key share, Trying to fetch the share again...\n", nowI)
+							successNewShare := false
+							newShare, index, err := nowEach.ShareApiClient.GetShare(getNowStr())
+							if err != nil {
+								log.Printf("[%d] Error getting share after found out share is invalid: %s", nowI, err.Error())
+							} else {
+								validatorCosmosClients[nowI].SetCurrentShare(&KeyShare{
+									Share: *newShare,
+									Index: index,
+								})
+								pubKey, err := nowEach.CosmosClient.GetActivePubKey()
+								if err != nil {
+									log.Printf("[%d] Error getting active public key: %s", nowI, err.Error())
+								} else {
+									log.Printf("[%d] Got the active public keys from chain %v", nowI, pubKey)
+									validatorCosmosClients[nowI].SetCurrentShareExpiryBlock(pubKey.ActivePubKey.Expiry)
+									valid, err = validatorCosmosClients[nowI].VerifyShare(commits, false)
+									if err != nil {
+										log.Fatal("Error verifying new active key share:", err)
+									}
+									successNewShare = valid
+								}
+							}
+
+							if !successNewShare {
+								validatorCosmosClients[nowI].Pause()
+							} else {
+								log.Printf("[%d] Got valid key share from API, continue to submit shares...", nowI)
+							}
+
 						} else {
 							validatorCosmosClients[nowI].Unpause()
 							validatorCosmosClients[nowI].ResetInvalidShareNum()
