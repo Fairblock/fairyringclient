@@ -257,17 +257,12 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	txOut2, err := client.Subscribe(context.Background(), "", "tm.event = 'Tx'")
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	defer client.Stop()
 
 	s := bls.NewBLS12381Suite()
 
-	go listenForNewPubKey(txOut)
-	go listenForStartSubmitGeneralKeyShare(txOut2)
+	go handleTxEvents(txOut)
 
 	http.Handle("/metrics", promhttp.Handler())
 	log.Printf("Metrics is listening on port: %d\n", cfg.MetricsPort)
@@ -441,111 +436,119 @@ func hasCoinSpentEvent(e []abciTypes.Event) bool {
 	return false
 }
 
-func listenForStartSubmitGeneralKeyShare(txOut <-chan coretypes.ResultEvent) {
+func handleTxEvents(txOut <-chan coretypes.ResultEvent) {
 	for {
 		select {
 		case result := <-txOut:
-			id, found := result.Events["start-send-general-keyshare.start-send-general-keyshare-identity"]
-			if !found {
-				continue
-			}
-
-			if len(id) < 1 {
-				continue
-			}
-
-			identity := id[0]
-
-			log.Printf("Start Submitting General Key Share for identity: %s", identity)
-			s := bls.NewBLS12381Suite()
-			for i, eachClient := range validatorCosmosClients {
-				nowI := i
-				nowClient := eachClient
-
-				currentShare := nowClient.CurrentShare
-
-				extractedKey := distIBE.Extract(s, currentShare.Share.Value, uint32(currentShare.Index), []byte(identity))
-				extractedKeyBinary, err := extractedKey.SK.MarshalBinary()
-				if err != nil {
-					log.Fatal(err)
+			for k := range result.Events {
+				switch k {
+				case "start-send-general-keyshare.start-send-general-keyshare-identity":
+					handleStartSubmitGeneralKeyShareEvent(result.Events)
+					break
+				case "queued-pubkey-created.queued-pubkey-created-pubkey":
+					handleNewPubKeyEvent(result.Events)
+					break
 				}
-				extractedKeyHex := hex.EncodeToString(extractedKeyBinary)
-
-				log.Printf("Derived General Key Share: %s\n", extractedKeyHex)
-
-				resp, err := nowClient.CosmosClient.BroadcastTx(&types.MsgCreateGeneralKeyShare{
-					Creator:       nowClient.CosmosClient.GetAddress(),
-					KeyShare:      extractedKeyHex,
-					KeyShareIndex: currentShare.Index,
-					IdType:        "private-gov-identity",
-					IdValue:       identity,
-				}, true)
-				if err != nil {
-					log.Printf("[%d] Submit General KeyShare for Identity %s ERROR: %s\n", nowI, identity, err.Error())
-				}
-				txResp, err := nowClient.CosmosClient.WaitForTx(resp.TxHash, time.Second)
-				if err != nil {
-					log.Printf("[%d] General KeyShare for Identity %s Failed: %s\n", nowI, identity, err.Error())
-					return
-				}
-				if txResp.TxResponse.Code != 0 {
-					log.Printf("[%d] General KeyShare for Identity %s Failed: %s\n", nowI, identity, txResp.TxResponse.RawLog)
-					return
-				}
-				log.Printf("[%d] Submit General KeyShare for Identity %s Confirmed\n", nowI, identity)
 			}
 		}
 	}
 }
 
-func listenForNewPubKey(txOut <-chan coretypes.ResultEvent) {
-	for {
-		select {
-		case result := <-txOut:
-			pubKey, found := result.Events["queued-pubkey-created.queued-pubkey-created-pubkey"]
-			if !found {
-				continue
-			}
+func handleStartSubmitGeneralKeyShareEvent(data map[string][]string) {
+	id, found := data["start-send-general-keyshare.start-send-general-keyshare-identity"]
+	if !found {
+		return
+	}
 
-			expiryHeightStr, found := result.Events["queued-pubkey-created.queued-pubkey-created-expiry-height"]
-			if !found {
-				continue
-			}
+	if len(id) < 1 {
+		return
+	}
 
-			expiryHeight, err := strconv.ParseUint(expiryHeightStr[0], 10, 64)
-			if err != nil {
-				log.Printf("Error parsing pubkey expiry height: %s\n", err.Error())
-				continue
-			}
+	identity := id[0]
 
-			log.Printf("New Pubkey found: %s | Expiry Height: %d\n", pubKey[0], expiryHeight)
+	log.Printf("Start Submitting General Key Share for identity: %s", identity)
+	s := bls.NewBLS12381Suite()
+	for i, eachClient := range validatorCosmosClients {
+		nowI := i
+		nowClient := eachClient
 
-			for i, eachClient := range validatorCosmosClients {
-				nowI := i
-				nowClient := eachClient
-				log.Printf("nowClient: %d", nowClient.CurrentShare.Index)
+		currentShare := nowClient.CurrentShare
 
-				newShare, index, err := nowClient.ShareApiClient.GetShare(getNowStr())
-
-				if err != nil {
-					log.Printf("[%d] Error getting the pending keyshare: %s", nowI, err.Error())
-					return
-				}
-				validatorCosmosClients[nowI].SetPendingShare(&KeyShare{
-					Share: *newShare,
-					Index: index,
-				})
-				validatorCosmosClients[nowI].SetPendingShareExpiryBlock(expiryHeight)
-				log.Printf("Got [%d] Client's New Share: %v | Expires at: %d\n", nowI, newShare.Value, expiryHeight)
-
-				commits, err := validatorCosmosClients[index].CosmosClient.GetCommitments()
-				if err != nil {
-					log.Fatal("Error getting commitments:", err)
-				}
-
-				validatorCosmosClients[index].SetCommitments(commits)
-				log.Printf("[%d] Updated Commitments...", index)
-			}
+		extractedKey := distIBE.Extract(s, currentShare.Share.Value, uint32(currentShare.Index), []byte(identity))
+		extractedKeyBinary, err := extractedKey.SK.MarshalBinary()
+		if err != nil {
+			log.Fatal(err)
 		}
+		extractedKeyHex := hex.EncodeToString(extractedKeyBinary)
+
+		log.Printf("Derived General Key Share: %s\n", extractedKeyHex)
+
+		resp, err := nowClient.CosmosClient.BroadcastTx(&types.MsgCreateGeneralKeyShare{
+			Creator:       nowClient.CosmosClient.GetAddress(),
+			KeyShare:      extractedKeyHex,
+			KeyShareIndex: currentShare.Index,
+			IdType:        "private-gov-identity",
+			IdValue:       identity,
+		}, true)
+		if err != nil {
+			log.Printf("[%d] Submit General KeyShare for Identity %s ERROR: %s\n", nowI, identity, err.Error())
+		}
+		txResp, err := nowClient.CosmosClient.WaitForTx(resp.TxHash, time.Second)
+		if err != nil {
+			log.Printf("[%d] General KeyShare for Identity %s Failed: %s\n", nowI, identity, err.Error())
+			return
+		}
+		if txResp.TxResponse.Code != 0 {
+			log.Printf("[%d] General KeyShare for Identity %s Failed: %s\n", nowI, identity, txResp.TxResponse.RawLog)
+			return
+		}
+		log.Printf("[%d] Submit General KeyShare for Identity %s Confirmed\n", nowI, identity)
+	}
+}
+
+func handleNewPubKeyEvent(data map[string][]string) {
+	pubKey, found := data["queued-pubkey-created.queued-pubkey-created-pubkey"]
+	if !found {
+		return
+	}
+
+	expiryHeightStr, found := data["queued-pubkey-created.queued-pubkey-created-expiry-height"]
+	if !found {
+		return
+	}
+
+	expiryHeight, err := strconv.ParseUint(expiryHeightStr[0], 10, 64)
+	if err != nil {
+		log.Printf("Error parsing pubkey expiry height: %s\n", err.Error())
+		return
+	}
+
+	log.Printf("New Pubkey found: %s | Expiry Height: %d\n", pubKey[0], expiryHeight)
+
+	for i, eachClient := range validatorCosmosClients {
+		nowI := i
+		nowClient := eachClient
+		log.Printf("nowClient: %d", nowClient.CurrentShare.Index)
+
+		newShare, index, err := nowClient.ShareApiClient.GetShare(getNowStr())
+
+		if err != nil {
+			log.Printf("[%d] Error getting the pending keyshare: %s", nowI, err.Error())
+			return
+		}
+		validatorCosmosClients[nowI].SetPendingShare(&KeyShare{
+			Share: *newShare,
+			Index: index,
+		})
+		validatorCosmosClients[nowI].SetPendingShareExpiryBlock(expiryHeight)
+		log.Printf("Got [%d] Client's New Share: %v | Expires at: %d\n", nowI, newShare.Value, expiryHeight)
+
+		commits, err := validatorCosmosClients[index].CosmosClient.GetCommitments()
+		if err != nil {
+			log.Fatal("Error getting commitments:", err)
+		}
+
+		validatorCosmosClients[index].SetCommitments(commits)
+		log.Printf("[%d] Updated Commitments...", index)
 	}
 }
