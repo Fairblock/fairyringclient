@@ -530,7 +530,6 @@ func handleNewPubKeyEvent(data map[string][]string) {
 	for i, eachClient := range validatorCosmosClients {
 		nowI := i
 		nowClient := eachClient
-		log.Printf("nowClient: %d", nowClient.CurrentShare.Index)
 
 		newShare, index, err := nowClient.ShareApiClient.GetShare(getNowStr())
 
