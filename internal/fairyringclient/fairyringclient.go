@@ -351,11 +351,13 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 									validatorCosmosClients[nowI].SetPendingShareExpiryBlock(pubKey.QueuedPubKey.Expiry)
 								}
 							}
-
 						} else {
-							validatorCosmosClients[nowI].Unpause()
 							validatorCosmosClients[nowI].ResetInvalidShareNum()
-							log.Printf("[%d] Client Unpaused, current invalid share count: %d...\n", nowI, nowEach.InvalidShareInARow)
+
+							if validatorCosmosClients[nowI].Paused {
+								validatorCosmosClients[nowI].Unpause()
+								log.Printf("[%d] Client Unpaused, current invalid share count: %d...\n", nowI, nowEach.InvalidShareInARow)
+							}
 						}
 
 						validatorCosmosClients[nowI].ActivatePendingShare()
