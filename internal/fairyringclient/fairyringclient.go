@@ -543,12 +543,12 @@ func handleNewPubKeyEvent(data map[string][]string) {
 		validatorCosmosClients[nowI].SetPendingShareExpiryBlock(expiryHeight)
 		log.Printf("Got [%d] Client's New Share: %v | Expires at: %d\n", nowI, newShare.Value, expiryHeight)
 
-		commits, err := validatorCosmosClients[index].CosmosClient.GetCommitments()
+		commits, err := validatorCosmosClients[nowI].CosmosClient.GetCommitments()
 		if err != nil {
 			log.Fatal("Error getting commitments:", err)
 		}
 
-		validatorCosmosClients[index].SetCommitments(commits)
-		log.Printf("[%d] Updated Commitments...", index)
+		validatorCosmosClients[nowI].SetCommitments(commits)
+		log.Printf("[%d] Updated Commitments...", nowI)
 	}
 }
