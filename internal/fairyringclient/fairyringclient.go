@@ -178,6 +178,8 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 				})
 
 				validatorCosmosClients[index].SetPendingShareExpiryBlock(pubKeys.QueuedPubKey.Expiry)
+
+				log.Printf("[%d] Updated pending share: %v, expires at block: %d", index, validatorCosmosClients[index].PendingShare, validatorCosmosClients[index].PendingShareExpiryBlock)
 			}
 		}
 
@@ -190,7 +192,7 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 
 		log.Printf("[%d] Verifying Current Key Share...", index)
 
-		valid, err := validatorCosmosClients[index].VerifyShare(commits, false)
+		valid, err := validatorCosmosClients[index].VerifyShare(commits.ActiveCommitments, false)
 		if err != nil {
 			log.Fatal("Error verifying active key share:", err)
 		}
@@ -203,12 +205,12 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 
 		if validatorCosmosClients[index].PendingShare != nil && commits.QueuedCommitments != nil {
 			log.Printf("[%d] Verifying Pending Key Share...", index)
-			valid, err := validatorCosmosClients[index].VerifyShare(commits, true)
+			valid, err := validatorCosmosClients[index].VerifyShare(commits.QueuedCommitments, true)
 			if err != nil {
-				log.Fatal("Error verifying queued key share:", err)
+				log.Fatal("Error verifying pending key share:", err)
 			}
 			if !valid {
-				log.Printf("[%d] Queued key share is invalid...", index)
+				log.Printf("[%d] Pending key share is invalid...", index)
 			} else {
 				log.Printf("[%d] Pending Key Share is valid !", index)
 			}
@@ -289,75 +291,63 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 					if nowEach.PendingShare != nil {
 						log.Printf("[%d] Pending Share expires at: %d, in %d blocks | %v", nowI, nowEach.PendingShareExpiryBlock, nowEach.PendingShareExpiryBlock-uint64(height), nowEach.PendingShare.Share)
 					}
+					// When it is time to switch key share
 					if nowEach.CurrentShareExpiryBlock != 0 && nowEach.CurrentShareExpiryBlock <= processHeight {
 						log.Printf("[%d] current share expired, trying to switch to the queued one...\n", nowI)
+						// But pending key share not found
+						isVerified := false
 						if nowEach.PendingShare == nil {
 							log.Printf("[%d] Unable to switch to latest share, pending share not found, trying to get pending share...\n", nowI)
+							valid, err := nowEach.UpdateAndVerifyPendingShare()
 
-							newShare, index, err := nowEach.ShareApiClient.GetShare(getNowStr())
 							if err != nil {
-								log.Printf("[%d] Error getting the pending keyshare: %s", nowI, err.Error())
-							} else {
-								validatorCosmosClients[nowI].SetPendingShare(&KeyShare{
-									Share: *newShare,
-									Index: index,
-								})
-								pubKey, err := nowEach.CosmosClient.GetActivePubKey()
-								if err != nil {
-									log.Printf("[%d] Error getting queued public key when trying to get pending keyshare: %s", nowI, err.Error())
-								} else {
-									log.Printf("[%d] Got the active public keys from the chain %v", nowI, pubKey)
-									validatorCosmosClients[nowI].SetPendingShareExpiryBlock(pubKey.QueuedPubKey.Expiry)
-								}
+								log.Printf("[%d] Error getting pending share from API.", nowI)
+								return
 							}
 
-							return
+							if !valid {
+								log.Printf("[%d] Got Invalid Share from API.", nowI)
+								return
+							}
+
+							log.Printf("[%d] Successfully Got Valid Pending Share from API.", nowI)
+							isVerified = true
 						}
 
-						commits := validatorCosmosClients[nowI].Commitments
-
-						valid, err := validatorCosmosClients[nowI].VerifyShare(commits, true)
-						if err != nil {
-							log.Fatal("Error verifying active key share:", err)
-						}
-						if !valid {
-							log.Printf("[%d] Active key share is invalid after switching key share, Trying to fetch the share again...\n", nowI)
-							successNewShare := false
-							newShare, index, err := nowEach.ShareApiClient.GetShare(getNowStr())
+						if !isVerified {
+							// Pending Share found, Verify before switching
+							pendingShareValid, err := nowEach.VerifyShare(nowEach.Commitments.QueuedCommitments, true)
 							if err != nil {
-								log.Printf("[%d] Error getting share after found out share is invalid: %s", nowI, err.Error())
-							} else {
-								valid, err = validatorCosmosClients[nowI].VerifyShare(commits, false)
-								if err != nil {
-									log.Fatal("Error verifying new active key share:", err)
-								}
-								successNewShare = valid
+								log.Printf("[%d] Error verifying pending share: %s", nowI, err.Error())
+								return
 							}
 
-							if !successNewShare {
-								log.Printf("[%d] New Share is still invalid, pausing the client...", nowI)
-								validatorCosmosClients[nowI].Pause()
-							} else {
-								log.Printf("[%d] Got Valid Share from API: %v, updating pending shares...", nowI, newShare)
-								validatorCosmosClients[nowI].SetPendingShare(&KeyShare{
-									Share: *newShare,
-									Index: index,
-								})
-								pubKey, err := nowEach.CosmosClient.GetActivePubKey()
-								if err != nil {
-									log.Printf("[%d] Error getting active public key: %s", nowI, err.Error())
-								} else {
-									log.Printf("[%d] Pending Share updated...", nowI)
-									validatorCosmosClients[nowI].SetPendingShareExpiryBlock(pubKey.QueuedPubKey.Expiry)
-								}
-							}
-						} else {
-							validatorCosmosClients[nowI].ResetInvalidShareNum()
+							if !pendingShareValid {
+								log.Printf("[%d] The existing pending share is invalid, trying to get a new one from API...", nowI)
 
-							if validatorCosmosClients[nowI].Paused {
-								validatorCosmosClients[nowI].Unpause()
-								log.Printf("[%d] Client Unpaused, current invalid share count: %d...\n", nowI, nowEach.InvalidShareInARow)
+								valid, err := nowEach.UpdateAndVerifyPendingShare()
+
+								if err != nil {
+									log.Printf("[%d] Error getting pending share from API.", nowI)
+									return
+								}
+
+								if !valid {
+									log.Printf("[%d] Got Invalid Share from API.", nowI)
+									return
+								}
+
+								log.Printf("[%d] Successfully Got Valid Pending Share from API.", nowI)
 							}
+						}
+
+						log.Printf("[%d] The Existing Pending Share is Valid !", nowI)
+
+						validatorCosmosClients[nowI].ResetInvalidShareNum()
+
+						if validatorCosmosClients[nowI].Paused {
+							validatorCosmosClients[nowI].Unpause()
+							log.Printf("[%d] Client Unpaused, current invalid share count: %d...\n", nowI, nowEach.InvalidShareInARow)
 						}
 
 						validatorCosmosClients[nowI].ActivatePendingShare()
