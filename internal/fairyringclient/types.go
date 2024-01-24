@@ -88,7 +88,7 @@ func (v *ValidatorClients) SetupShareClient(
 	return result.TxHash, nil
 }
 
-func (v *ValidatorClients) UpdateAndVerifyPendingShare() (bool, error) {
+func (v *ValidatorClients) UpdateAndVerifyPendingShare(currentBlockHeight int64) (bool, error) {
 
 	pubKey, err := v.CosmosClient.GetActivePubKey()
 
@@ -106,7 +106,7 @@ func (v *ValidatorClients) UpdateAndVerifyPendingShare() (bool, error) {
 	var index uint64
 	usingCommits := commits.QueuedCommitments
 
-	if pubKey.ActivePubKey.Expiry < 15 {
+	if pubKey.ActivePubKey.Expiry-uint64(currentBlockHeight) < 15 {
 		// Current round ending soon, get the share for next round from API
 		v.SetPendingShareExpiryBlock(pubKey.QueuedPubKey.Expiry)
 		newShare, index, err = v.ShareApiClient.GetShare(getNowStr())

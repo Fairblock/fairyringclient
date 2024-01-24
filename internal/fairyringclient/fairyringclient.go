@@ -298,7 +298,7 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 						isVerified := false
 						if nowEach.PendingShare == nil {
 							log.Printf("[%d] Unable to switch to latest share, pending share not found, trying to get pending share...\n", nowI)
-							valid, err := nowEach.UpdateAndVerifyPendingShare()
+							valid, err := validatorCosmosClients[nowI].UpdateAndVerifyPendingShare(height)
 
 							if err != nil {
 								log.Printf("[%d] Error getting pending share from API.", nowI)
@@ -325,7 +325,7 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 							if !pendingShareValid {
 								log.Printf("[%d] The existing pending share is invalid, trying to get a new one from API...", nowI)
 
-								valid, err := nowEach.UpdateAndVerifyPendingShare()
+								valid, err := validatorCosmosClients[nowI].UpdateAndVerifyPendingShare(height)
 
 								if err != nil {
 									log.Printf("[%d] Error getting pending share from API.", nowI)
