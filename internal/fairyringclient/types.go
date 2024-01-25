@@ -2,13 +2,13 @@ package fairyringclient
 
 import (
 	"encoding/hex"
-	"errors"
 	"fairyring/x/keyshare/types"
 	"fairyringclient/pkg/cosmosClient"
 	"fairyringclient/pkg/shareAPIClient"
 	distIBE "github.com/FairBlock/DistributedIBE"
 	"github.com/drand/kyber"
 	bls "github.com/drand/kyber-bls12381"
+	"github.com/pkg/errors"
 	"math"
 )
 
@@ -20,6 +20,7 @@ type KeyShare struct {
 type ValidatorClients struct {
 	CosmosClient            *cosmosClient.CosmosClient
 	ShareApiClient          *shareAPIClient.ShareAPIClient
+	Commitments             *types.QueryCommitmentsResponse
 	CurrentShare            *KeyShare
 	PendingShare            *KeyShare
 	CurrentShareExpiryBlock uint64
@@ -34,6 +35,10 @@ func (v *ValidatorClients) Pause() {
 
 func (v *ValidatorClients) Unpause() {
 	v.Paused = false
+}
+
+func (v *ValidatorClients) SetCommitments(c *types.QueryCommitmentsResponse) {
+	v.Commitments = c
 }
 
 func (v *ValidatorClients) IncreaseInvalidShareNum() {
@@ -83,7 +88,55 @@ func (v *ValidatorClients) SetupShareClient(
 	return result.TxHash, nil
 }
 
-func (v *ValidatorClients) VerifyShare(commitments *types.QueryCommitmentsResponse, verifyPendingShare bool) (bool, error) {
+func (v *ValidatorClients) UpdateAndVerifyPendingShare(currentBlockHeight int64) (bool, error) {
+
+	pubKey, err := v.CosmosClient.GetActivePubKey()
+
+	if err != nil {
+		return false, errors.Wrap(err, "getting public key from chain")
+	}
+
+	commits, err := v.CosmosClient.GetCommitments()
+
+	if err != nil {
+		return false, errors.Wrap(err, "getting commitments from chain")
+	}
+
+	var newShare *distIBE.Share
+	var index uint64
+	usingCommits := commits.QueuedCommitments
+
+	if pubKey.ActivePubKey.Expiry-uint64(currentBlockHeight) < 15 {
+		// Current round ending soon, get the share for next round from API
+		v.SetPendingShareExpiryBlock(pubKey.QueuedPubKey.Expiry)
+		newShare, index, err = v.ShareApiClient.GetShare(getNowStr())
+	} else {
+		// Current round just started ? Get the share for current round from API
+		v.SetPendingShareExpiryBlock(pubKey.ActivePubKey.Expiry)
+		newShare, index, err = v.ShareApiClient.GetLastShare(getNowStr())
+		usingCommits = commits.ActiveCommitments
+	}
+
+	if err != nil {
+		return false, errors.Wrap(err, "getting pending share from API")
+	}
+
+	v.SetPendingShare(&KeyShare{
+		Share: *newShare,
+		Index: index,
+	})
+
+	valid, err := v.VerifyShare(usingCommits, true)
+	if err != nil {
+		return false, errors.Wrap(err, "invalid share from API ?")
+	}
+
+	v.SetCommitments(commits)
+
+	return valid, nil
+}
+
+func (v *ValidatorClients) VerifyShare(commitments *types.Commitments, verifyPendingShare bool) (bool, error) {
 	s := bls.NewBLS12381Suite()
 
 	targetShare := v.CurrentShare
@@ -94,13 +147,7 @@ func (v *ValidatorClients) VerifyShare(commitments *types.QueryCommitmentsRespon
 		targetShare = v.PendingShare
 	}
 
-	targetCommitments := commitments.ActiveCommitments.Commitments
-	if verifyPendingShare {
-		if commitments.QueuedCommitments == nil {
-			return false, errors.New("verify pending share but queued commitment not found")
-		}
-		targetCommitments = commitments.QueuedCommitments.Commitments
-	}
+	targetCommitments := commitments.Commitments
 
 	extracted := distIBE.Extract(s, targetShare.Share.Value, uint32(targetShare.Index), []byte("verifying"))
 
