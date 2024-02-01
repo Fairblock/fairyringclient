@@ -35,8 +35,6 @@ var (
 	interrupt chan os.Signal
 )
 
-const PrivateKeyFileNameFormat = ".pem"
-
 var (
 	validatorCosmosClients []ValidatorClients
 	pks                    []string
@@ -104,12 +102,7 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 
 		shareClient, err := shareAPIClient.NewShareAPIClient(
 			cfg.ShareAPIUrl,
-			fmt.Sprintf(
-				"%s/sk%d%s",
-				keysDir,
-				privateKeyIndexNum,
-				PrivateKeyFileNameFormat,
-			),
+			eachPKey,
 		)
 
 		if err != nil {
