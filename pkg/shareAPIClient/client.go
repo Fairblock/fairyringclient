@@ -50,7 +50,14 @@ func NewShareAPIClient(url, privateKeHex string) (*ShareAPIClient, error) {
 }
 
 func (s ShareAPIClient) signMessage(message []byte) (string, error) {
-	sig, err := dcrdSecp256k1.SignCompact(&s.dcrdPrivKey, message, false)
+	msgHash := sha256.New()
+	_, err := msgHash.Write(message)
+	if err != nil {
+		return "", err
+	}
+	msgHashSum := msgHash.Sum(nil)
+
+	sig, err := dcrdSecp256k1.SignCompact(&s.dcrdPrivKey, msgHashSum, false)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -94,14 +101,7 @@ func (s ShareAPIClient) doRequest(path, method, body string) ([]byte, error) {
 }
 
 func (s ShareAPIClient) GetShare(msg string) (*distIBE.Share, uint64, error) {
-	msgHash := sha256.New()
-	_, err := msgHash.Write([]byte(msg))
-	if err != nil {
-		return nil, 0, err
-	}
-	msgHashSum := msgHash.Sum(nil)
-
-	signed, err := s.signMessage(msgHashSum)
+	signed, err := s.signMessage([]byte(msg))
 	if err != nil {
 		return nil, 0, err
 	}
@@ -111,7 +111,7 @@ func (s ShareAPIClient) GetShare(msg string) (*distIBE.Share, uint64, error) {
 		HttpMethod: "GET",
 		QueryStringParameters: GetShareParam{
 			PublicKey: s.base64PubKey,
-			Msg:       string(msgHashSum),
+			Msg:       msg,
 			SignedMsg: signed,
 		},
 	}
@@ -166,14 +166,7 @@ func (s ShareAPIClient) GetShare(msg string) (*distIBE.Share, uint64, error) {
 }
 
 func (s ShareAPIClient) GetLastShare(msg string) (*distIBE.Share, uint64, error) {
-	msgHash := sha256.New()
-	_, err := msgHash.Write([]byte(msg))
-	if err != nil {
-		return nil, 0, err
-	}
-	msgHashSum := msgHash.Sum(nil)
-
-	signed, err := s.signMessage(msgHashSum)
+	signed, err := s.signMessage([]byte(msg))
 	if err != nil {
 		return nil, 0, err
 	}
@@ -183,7 +176,7 @@ func (s ShareAPIClient) GetLastShare(msg string) (*distIBE.Share, uint64, error)
 		HttpMethod: "GET",
 		QueryStringParameters: GetShareParam{
 			PublicKey: s.base64PubKey,
-			Msg:       string(msgHashSum),
+			Msg:       msg,
 			SignedMsg: signed,
 		},
 	}
