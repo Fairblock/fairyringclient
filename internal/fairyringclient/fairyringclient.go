@@ -12,11 +12,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"net/http"
+	"strings"
 
 	"log"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	distIBE "github.com/FairBlock/DistributedIBE"
@@ -73,6 +73,25 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 
 	gRPCEndpoint := cfg.GetGRPCEndpoint()
 
+	PauseThreshold := cfg.InvalidSharePauseThreshold
+
+	client, err := tmclient.New(
+		fmt.Sprintf(
+			"%s://%s:%d",
+			cfg.FairyRingNode.Protocol,
+			cfg.FairyRingNode.IP,
+			cfg.FairyRingNode.Port,
+		),
+		"/websocket",
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = client.Start()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	allPrivateKeys := cfg.PrivateKeys
 	if len(allPrivateKeys) == 0 {
 		log.Fatal("Private Keys Array is empty in config file, please add a valid cosmos account private key before starting")
@@ -100,6 +119,12 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 		addr := eachClient.GetAddress()
 		log.Printf("Validator Cosmos Client Loaded Address: %s\n", addr)
 
+		bal, err := eachClient.GetBalance(Denom)
+		if err != nil {
+			log.Fatal("Error getting", eachClient.GetAddress(), "account balance: ", err)
+		}
+		log.Printf("Address: %s , Balance: %s %s\n", eachClient.GetAddress(), bal.String(), Denom)
+
 		shareClient, err := shareAPIClient.NewShareAPIClient(
 			cfg.ShareAPIUrl,
 			eachPKey,
@@ -109,35 +134,38 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 			log.Fatal("Error creating share api client:", err)
 		}
 
-		privateKeyIndexNum++
-
-		bal, err := eachClient.GetBalance(Denom)
-		if err != nil {
-			log.Fatal("Error getting", eachClient.GetAddress(), "account balance: ", err)
-		}
-		log.Printf("Address: %s , Balance: %s %s\n", eachClient.GetAddress(), bal.String(), Denom)
-
-		share, shareIndex, err := shareClient.GetShare(getNowStr())
-
-		if err != nil {
-			log.Fatal("Error getting share:", err)
-		}
-		log.Printf("Got share: %s | Index: %d", share, shareIndex)
-
 		validatorCosmosClients[index] = ValidatorClients{
 			CosmosClient:   eachClient,
 			ShareApiClient: shareClient,
-			CurrentShare: &KeyShare{
-				Share: *share,
-				Index: shareIndex,
-			},
 		}
 
 		allAccAddrs[index] = eachClient.GetAccAddress()
 
+		privateKeyIndexNum++
+	}
+
+	for i, eachClient := range validatorCosmosClients {
+		eachAddr := eachClient.CosmosClient.GetAddress()
+		_, err = eachClient.CosmosClient.BroadcastTx(&types.MsgRegisterValidator{
+			Creator: eachAddr,
+		}, true)
+		if err != nil {
+			if !strings.Contains(err.Error(), "validator already registered") {
+				log.Fatal(err)
+			}
+		}
+		log.Printf("[%d] %s Registered as Validator", i, eachAddr)
+	}
+
+	for index, eachCosmosClient := range validatorCosmosClients {
+
+		shareClient := eachCosmosClient.ShareApiClient
+		eachClient := eachCosmosClient.CosmosClient
+
 		pubKeys, err := eachClient.GetActivePubKey()
 		if err != nil {
-			log.Fatal("Error getting active pub key on pep module: ", err)
+			log.Println("Error getting active pub key on pep module: ", err)
+			break
 		}
 
 		log.Printf("Active Pub Key: %s Expires at: %d | Queued: %s Expires at: %d\n",
@@ -146,6 +174,13 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 			pubKeys.QueuedPubKey.PublicKey,
 			pubKeys.QueuedPubKey.Expiry,
 		)
+
+		share, shareIndex, err := shareClient.GetShare(getNowStr())
+
+		if err != nil {
+			log.Fatal("Error getting share:", err)
+		}
+		log.Printf("Got share: %s | Index: %d", share, shareIndex)
 
 		validatorCosmosClients[index].SetCurrentShareExpiryBlock(pubKeys.ActivePubKey.Expiry)
 		log.Println("Current Share Expiry Block set to: ", validatorCosmosClients[index].CurrentShareExpiryBlock)
@@ -208,39 +243,6 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 				log.Printf("[%d] Pending Key Share is valid !", index)
 			}
 		}
-
-	}
-
-	PauseThreshold := cfg.InvalidSharePauseThreshold
-
-	client, err := tmclient.New(
-		fmt.Sprintf(
-			"%s://%s:%d",
-			cfg.FairyRingNode.Protocol,
-			cfg.FairyRingNode.IP,
-			cfg.FairyRingNode.Port,
-		),
-		"/websocket",
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = client.Start()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	for i, eachClient := range validatorCosmosClients {
-		eachAddr := eachClient.CosmosClient.GetAddress()
-		_, err = eachClient.CosmosClient.BroadcastTx(&types.MsgRegisterValidator{
-			Creator: eachAddr,
-		}, true)
-		if err != nil {
-			if !strings.Contains(err.Error(), "validator already registered") {
-				log.Fatal(err)
-			}
-		}
-		log.Printf("[%d] %s Registered as Validator", i, eachAddr)
 	}
 
 	out, err := client.Subscribe(context.Background(), "", "tm.event = 'NewBlockHeader'")
