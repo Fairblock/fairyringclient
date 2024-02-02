@@ -164,8 +164,11 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 
 		pubKeys, err := eachClient.GetActivePubKey()
 		if err != nil {
-			log.Println("Error getting active pub key on pep module: ", err)
-			break
+			if strings.Contains(err.Error(), "does not exists") {
+				log.Println("Active pub key does not exists...")
+				break
+			}
+			log.Fatal("Error getting active pub key on KeyShare module: ", err)
 		}
 
 		log.Printf("Active Pub Key: %s Expires at: %d | Queued: %s Expires at: %d\n",
@@ -282,6 +285,10 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 				nowI := i
 				nowEach := each
 				go func() {
+					if nowEach.CurrentShare == nil {
+						log.Printf("[%d] Current Share not found, client paused...", nowI)
+						return
+					}
 					log.Printf("[%d] Current Share Expires at: %d, in %d blocks | %v", nowI, nowEach.CurrentShareExpiryBlock, nowEach.CurrentShareExpiryBlock-uint64(height), nowEach.CurrentShare.Share)
 					if nowEach.PendingShare != nil {
 						log.Printf("[%d] Pending Share expires at: %d, in %d blocks | %v", nowI, nowEach.PendingShareExpiryBlock, nowEach.PendingShareExpiryBlock-uint64(height), nowEach.PendingShare.Share)
