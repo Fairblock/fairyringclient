@@ -111,18 +111,18 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 
 		privateKeyIndexNum++
 
+		bal, err := eachClient.GetBalance(Denom)
+		if err != nil {
+			log.Fatal("Error getting", eachClient.GetAddress(), "account balance: ", err)
+		}
+		log.Printf("Address: %s , Balance: %s %s\n", eachClient.GetAddress(), bal.String(), Denom)
+
 		share, shareIndex, err := shareClient.GetShare(getNowStr())
 
 		if err != nil {
 			log.Fatal("Error getting share:", err)
 		}
 		log.Printf("Got share: %s | Index: %d", share, shareIndex)
-
-		bal, err := eachClient.GetBalance(Denom)
-		if err != nil {
-			log.Fatal("Error getting", eachClient.GetAddress(), "account balance: ", err)
-		}
-		log.Printf("Address: %s , Balance: %s %s\n", eachClient.GetAddress(), bal.String(), Denom)
 
 		validatorCosmosClients[index] = ValidatorClients{
 			CosmosClient:   eachClient,
