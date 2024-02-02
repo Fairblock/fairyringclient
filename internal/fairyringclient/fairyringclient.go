@@ -296,6 +296,7 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 					// When it is time to switch key share
 					if nowEach.CurrentShareExpiryBlock != 0 && nowEach.CurrentShareExpiryBlock <= processHeight {
 						log.Printf("[%d] current share expired, trying to switch to the queued one...\n", nowI)
+						validatorCosmosClients[nowI].RemoveCurrentShare()
 						// But pending key share not found
 						isVerified := false
 						if nowEach.PendingShare == nil {

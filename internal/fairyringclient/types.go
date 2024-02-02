@@ -72,6 +72,11 @@ func (v *ValidatorClients) ActivatePendingShare() {
 	v.PendingShareExpiryBlock = 0
 }
 
+func (v *ValidatorClients) RemoveCurrentShare() {
+	v.CurrentShare = nil
+	v.CurrentShareExpiryBlock = 0
+}
+
 func (v *ValidatorClients) SetupShareClient(
 	endpoint string,
 	chainID string,
