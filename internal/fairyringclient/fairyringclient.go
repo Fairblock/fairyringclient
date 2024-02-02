@@ -537,8 +537,13 @@ func handleNewPubKeyEvent(data map[string][]string) {
 		log.Printf("Got [%d] Client's New Share: %v | Expires at: %d\n", nowI, newShare.Value, expiryHeight)
 
 		commits, err := validatorCosmosClients[nowI].CosmosClient.GetCommitments()
-		if err != nil {
-			log.Fatal("Error getting commitments:", err)
+		for err != nil {
+			if strings.Contains(err.Error(), "does not exists") {
+				time.Sleep(5)
+				commits, err = validatorCosmosClients[nowI].CosmosClient.GetCommitments()
+			} else {
+				log.Fatalf("Error getting commitments: %s", err.Error())
+			}
 		}
 
 		validatorCosmosClients[nowI].SetCommitments(commits)
