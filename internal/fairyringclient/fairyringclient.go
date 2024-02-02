@@ -530,11 +530,21 @@ func handleNewPubKeyEvent(data map[string][]string) {
 			log.Printf("[%d] Error getting the pending keyshare: %s", nowI, err.Error())
 			return
 		}
-		validatorCosmosClients[nowI].SetPendingShare(&KeyShare{
-			Share: *newShare,
-			Index: index,
-		})
-		validatorCosmosClients[nowI].SetPendingShareExpiryBlock(expiryHeight)
+
+		if nowClient.CurrentShare == nil && nowClient.CurrentShareExpiryBlock == 0 {
+			validatorCosmosClients[nowI].SetCurrentShare(&KeyShare{
+				Share: *newShare,
+				Index: index,
+			})
+			validatorCosmosClients[nowI].SetCurrentShareExpiryBlock(expiryHeight)
+		} else {
+			validatorCosmosClients[nowI].SetPendingShare(&KeyShare{
+				Share: *newShare,
+				Index: index,
+			})
+			validatorCosmosClients[nowI].SetPendingShareExpiryBlock(expiryHeight)
+		}
+
 		log.Printf("Got [%d] Client's New Share: %v | Expires at: %d\n", nowI, newShare.Value, expiryHeight)
 
 		commits, err := validatorCosmosClients[nowI].CosmosClient.GetCommitments()
