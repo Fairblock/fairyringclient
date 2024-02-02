@@ -36,16 +36,16 @@ func NewShareAPIClient(url, privateKeHex string) (*ShareAPIClient, error) {
 	dcrdPrivKey, dcrdPubKey := dcrdSecp256k1.PrivKeyFromBytes(keyBytes)
 
 	pubKeyBytes := dcrdPubKey.Serialize()
-	base64PubKey := make([]byte, base64.StdEncoding.EncodedLen(len(pubKeyBytes)))
+	base64PubKey := base64.StdEncoding.EncodeToString(pubKeyBytes)
 
-	base64.StdEncoding.Encode(base64PubKey, pubKeyBytes)
+	log.Printf("Base64 Pub Key: %s", base64PubKey)
 
 	return &ShareAPIClient{
 		URL:          url,
 		Client:       http.Client{},
 		dcrdPubKey:   *dcrdPubKey,
 		dcrdPrivKey:  *dcrdPrivKey,
-		base64PubKey: string(base64PubKey),
+		base64PubKey: base64PubKey,
 	}, nil
 }
 
