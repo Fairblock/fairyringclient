@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fairyringclient/pkg/rsa"
 	"fmt"
 	"github.com/cometbft/cometbft/crypto"
 	"github.com/spf13/viper"
@@ -15,7 +14,6 @@ const (
 	DefaultMetricsPort    = 2222
 	DefaultPauseThreshold = 5
 	DefaultFolderName     = ".fairyringclient"
-	DefaultKeyFolderName  = DefaultFolderName + "/keys"
 	DefaultChainID        = "fairytest-3"
 	DefaultDenom          = "ufairy"
 	DefaultShareAPIUrl    = "https://7d3q6i0uk2.execute-api.us-east-1.amazonaws.com"
@@ -64,14 +62,6 @@ func ReadConfigFromFile() (*Config, error) {
 	return &cfg, nil
 }
 
-func GetDefaultKeysDir() (string, error) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return homeDir + "/" + DefaultKeyFolderName, nil
-}
-
 func (c *Config) GetFairyRingNodeURI() string {
 	nodeURI := c.FairyRingNode.Protocol + "://" + c.FairyRingNode.IP + ":" + strconv.FormatUint(c.FairyRingNode.Port, 10)
 	return nodeURI
@@ -105,13 +95,6 @@ func (c *Config) ExportConfig() error {
 		}
 	}
 
-	if _, err := os.Stat(homeDir + "/" + DefaultKeyFolderName); os.IsNotExist(err) {
-		err = os.MkdirAll(homeDir+"/"+DefaultKeyFolderName, 0755)
-		if err != nil {
-			return fmt.Errorf("failed to create directory: %v", err)
-		}
-	}
-
 	filePath := filepath.Join(homeDir+"/"+DefaultFolderName, "config.yml")
 	_, err = os.Stat(filePath)
 	if os.IsNotExist(err) {
@@ -138,36 +121,6 @@ func (c *Config) ExportConfig() error {
 		fmt.Errorf("failed to write config as : %s", err.Error())
 	}
 
-	return nil
-}
-
-func GenerateRSAKey() error {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
-
-	pubKeyPath := homeDir + "/" + DefaultKeyFolderName + "/pk1.pem"
-	secretKeyPath := homeDir + "/" + DefaultKeyFolderName + "/sk1.pem"
-
-	if data, err := os.Stat(pubKeyPath); !os.IsNotExist(err) {
-		// Only Not Exists error is expected
-		return err
-	} else if data != nil {
-		fmt.Printf("RSA Pub key found in: %s, RSA Key will not be created...\n", pubKeyPath)
-		return nil
-	}
-
-	if data, err := os.Stat(secretKeyPath); !os.IsNotExist(err) {
-		return err
-	} else if data != nil {
-		fmt.Printf("RSA Secret key found in: %s, RSA Key will not be created...\n", secretKeyPath)
-		return nil
-	}
-
-	if err := rsa.GenerateRSAKey(secretKeyPath, pubKeyPath); err != nil {
-		return err
-	}
 	return nil
 }
 

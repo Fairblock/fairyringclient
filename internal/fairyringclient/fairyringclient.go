@@ -63,7 +63,7 @@ var (
 	})
 )
 
-func StartFairyRingClient(cfg config.Config, keysDir string) {
+func StartFairyRingClient(cfg config.Config) {
 
 	Denom := cfg.FairyRingNode.Denom
 
