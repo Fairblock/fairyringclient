@@ -15,15 +15,9 @@ var configInitCmd = &cobra.Command{
 
 		cfg := config.DefaultConfig(withCosmosKey)
 		cfg.ExportConfig()
-
-		withoutRSAKey, _ := cmd.Flags().GetBool("no-rsa-key")
-		if !withoutRSAKey {
-			config.GenerateRSAKey()
-		}
 	},
 }
 
 func init() {
 	configInitCmd.Flags().Bool("with-cosmos-key", false, "Initialize with random cosmos private key")
-	configInitCmd.Flags().Bool("no-rsa-key", false, "Initialize without RSA Key")
 }

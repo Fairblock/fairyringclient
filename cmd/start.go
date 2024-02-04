@@ -18,12 +18,7 @@ var startCmd = &cobra.Command{
 			fmt.Printf("Error loading config from file: %s\n", err.Error())
 			return
 		}
-		keysDir, err := config.GetDefaultKeysDir()
-		if err != nil {
-			fmt.Printf("Error getting default keys directory: %s\n", err.Error())
-			return
-		}
-		fairyringclient.StartFairyRingClient(*cfg, keysDir)
+		fairyringclient.StartFairyRingClient(*cfg)
 	},
 }
 
