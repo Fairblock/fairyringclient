@@ -1,11 +1,7 @@
 package shareAPIClient
 
 import (
-	"crypto"
-	"crypto/rand"
-	"crypto/rsa"
 	"crypto/sha256"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -13,6 +9,7 @@ import (
 	distIBE "github.com/FairBlock/DistributedIBE"
 	"github.com/cometbft/cometbft/libs/json"
 	"github.com/cometbft/cometbft/types/time"
+	dcrdSecp256k1 "github.com/decred/dcrd/dcrec/secp256k1"
 	bls "github.com/drand/kyber-bls12381"
 	"io"
 	"log"
@@ -23,28 +20,32 @@ import (
 )
 
 type ShareAPIClient struct {
-	URL        string
-	Client     http.Client
-	pubKey     string
-	privateKey rsa.PrivateKey
+	URL          string
+	Client       http.Client
+	dcrdPubKey   dcrdSecp256k1.PublicKey
+	base64PubKey string
+	dcrdPrivKey  dcrdSecp256k1.PrivateKey
 }
 
-func NewShareAPIClient(url, privateKeyPath string) (*ShareAPIClient, error) {
-	pKey, err := PemToPrivateKey(privateKeyPath)
+func NewShareAPIClient(url, privateKeHex string) (*ShareAPIClient, error) {
+	keyBytes, err := hex.DecodeString(privateKeHex)
 	if err != nil {
 		return nil, err
 	}
 
-	pubKeyStr, err := BytesToPemStr(x509.MarshalPKCS1PublicKey(&pKey.PublicKey), publicKeyType)
-	if err != nil {
-		return nil, err
-	}
+	dcrdPrivKey, dcrdPubKey := dcrdSecp256k1.PrivKeyFromBytes(keyBytes)
+
+	pubKeyBytes := dcrdPubKey.Serialize()
+	base64PubKey := base64.StdEncoding.EncodeToString(pubKeyBytes)
+
+	log.Printf("Base64 Pub Key: %s", base64PubKey)
 
 	return &ShareAPIClient{
-		URL:        url,
-		Client:     http.Client{},
-		pubKey:     pubKeyStr,
-		privateKey: *pKey,
+		URL:          url,
+		Client:       http.Client{},
+		dcrdPubKey:   *dcrdPubKey,
+		dcrdPrivKey:  *dcrdPrivKey,
+		base64PubKey: base64PubKey,
 	}, nil
 }
 
@@ -56,15 +57,12 @@ func (s ShareAPIClient) signMessage(message []byte) (string, error) {
 	}
 	msgHashSum := msgHash.Sum(nil)
 
-	sig, err := rsa.SignPSS(rand.Reader, &s.privateKey, crypto.SHA256, msgHashSum, nil)
+	sig, err := dcrdSecp256k1.SignCompact(&s.dcrdPrivKey, msgHashSum, false)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// return base64.StdEncoding.EncodeToString(sig), nil
-	signature, err := BytesToPemStr(sig, signatureType)
-
-	return signature, nil
+	return base64.StdEncoding.EncodeToString(sig), nil
 }
 
 func (s ShareAPIClient) decryptShare(shareCipher string) ([]byte, error) {
@@ -73,8 +71,7 @@ func (s ShareAPIClient) decryptShare(shareCipher string) ([]byte, error) {
 		return nil, err
 	}
 
-	label := []byte("OAEP Encrypted")
-	plainByte, err := rsa.DecryptOAEP(sha256.New(), rand.Reader, &s.privateKey, decoded, label)
+	plainByte, err := dcrdSecp256k1.Decrypt(&s.dcrdPrivKey, decoded)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +110,7 @@ func (s ShareAPIClient) GetShare(msg string) (*distIBE.Share, uint64, error) {
 		Path:       "/share-req",
 		HttpMethod: "GET",
 		QueryStringParameters: GetShareParam{
-			PublicKey: s.pubKey,
+			PublicKey: s.base64PubKey,
 			Msg:       msg,
 			SignedMsg: signed,
 		},
@@ -178,7 +175,7 @@ func (s ShareAPIClient) GetLastShare(msg string) (*distIBE.Share, uint64, error)
 		Path:       "/last-share-req",
 		HttpMethod: "GET",
 		QueryStringParameters: GetShareParam{
-			PublicKey: s.pubKey,
+			PublicKey: s.base64PubKey,
 			Msg:       msg,
 			SignedMsg: signed,
 		},

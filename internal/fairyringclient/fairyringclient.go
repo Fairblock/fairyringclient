@@ -12,11 +12,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"net/http"
+	"strings"
 
 	"log"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	distIBE "github.com/FairBlock/DistributedIBE"
@@ -34,8 +34,6 @@ var (
 	done      chan interface{}
 	interrupt chan os.Signal
 )
-
-const PrivateKeyFileNameFormat = ".pem"
 
 var (
 	validatorCosmosClients []ValidatorClients
@@ -75,6 +73,25 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 
 	gRPCEndpoint := cfg.GetGRPCEndpoint()
 
+	PauseThreshold := cfg.InvalidSharePauseThreshold
+
+	client, err := tmclient.New(
+		fmt.Sprintf(
+			"%s://%s:%d",
+			cfg.FairyRingNode.Protocol,
+			cfg.FairyRingNode.IP,
+			cfg.FairyRingNode.Port,
+		),
+		"/websocket",
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = client.Start()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	allPrivateKeys := cfg.PrivateKeys
 	if len(allPrivateKeys) == 0 {
 		log.Fatal("Private Keys Array is empty in config file, please add a valid cosmos account private key before starting")
@@ -102,49 +119,56 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 		addr := eachClient.GetAddress()
 		log.Printf("Validator Cosmos Client Loaded Address: %s\n", addr)
 
-		shareClient, err := shareAPIClient.NewShareAPIClient(
-			cfg.ShareAPIUrl,
-			fmt.Sprintf(
-				"%s/sk%d%s",
-				keysDir,
-				privateKeyIndexNum,
-				PrivateKeyFileNameFormat,
-			),
-		)
-
-		if err != nil {
-			log.Fatal("Error creating share api client:", err)
-		}
-
-		privateKeyIndexNum++
-
-		share, shareIndex, err := shareClient.GetShare(getNowStr())
-
-		if err != nil {
-			log.Fatal("Error getting share:", err)
-		}
-		log.Printf("Got share: %s | Index: %d", share, shareIndex)
-
 		bal, err := eachClient.GetBalance(Denom)
 		if err != nil {
 			log.Fatal("Error getting", eachClient.GetAddress(), "account balance: ", err)
 		}
 		log.Printf("Address: %s , Balance: %s %s\n", eachClient.GetAddress(), bal.String(), Denom)
 
+		shareClient, err := shareAPIClient.NewShareAPIClient(
+			cfg.ShareAPIUrl,
+			eachPKey,
+		)
+
+		if err != nil {
+			log.Fatal("Error creating share api client:", err)
+		}
+
 		validatorCosmosClients[index] = ValidatorClients{
 			CosmosClient:   eachClient,
 			ShareApiClient: shareClient,
-			CurrentShare: &KeyShare{
-				Share: *share,
-				Index: shareIndex,
-			},
 		}
 
 		allAccAddrs[index] = eachClient.GetAccAddress()
 
+		privateKeyIndexNum++
+	}
+
+	for i, eachClient := range validatorCosmosClients {
+		eachAddr := eachClient.CosmosClient.GetAddress()
+		_, err = eachClient.CosmosClient.BroadcastTx(&types.MsgRegisterValidator{
+			Creator: eachAddr,
+		}, true)
+		if err != nil {
+			if !strings.Contains(err.Error(), "validator already registered") {
+				log.Fatal(err)
+			}
+		}
+		log.Printf("[%d] %s Registered as Validator", i, eachAddr)
+	}
+
+	for index, eachCosmosClient := range validatorCosmosClients {
+
+		shareClient := eachCosmosClient.ShareApiClient
+		eachClient := eachCosmosClient.CosmosClient
+
 		pubKeys, err := eachClient.GetActivePubKey()
 		if err != nil {
-			log.Fatal("Error getting active pub key on pep module: ", err)
+			if strings.Contains(err.Error(), "does not exists") {
+				log.Println("Active pub key does not exists...")
+				break
+			}
+			log.Fatal("Error getting active pub key on KeyShare module: ", err)
 		}
 
 		log.Printf("Active Pub Key: %s Expires at: %d | Queued: %s Expires at: %d\n",
@@ -153,6 +177,13 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 			pubKeys.QueuedPubKey.PublicKey,
 			pubKeys.QueuedPubKey.Expiry,
 		)
+
+		share, shareIndex, err := shareClient.GetShare(getNowStr())
+
+		if err != nil {
+			log.Fatal("Error getting share:", err)
+		}
+		log.Printf("Got share: %s | Index: %d", share, shareIndex)
 
 		validatorCosmosClients[index].SetCurrentShareExpiryBlock(pubKeys.ActivePubKey.Expiry)
 		log.Println("Current Share Expiry Block set to: ", validatorCosmosClients[index].CurrentShareExpiryBlock)
@@ -215,39 +246,6 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 				log.Printf("[%d] Pending Key Share is valid !", index)
 			}
 		}
-
-	}
-
-	PauseThreshold := cfg.InvalidSharePauseThreshold
-
-	client, err := tmclient.New(
-		fmt.Sprintf(
-			"%s://%s:%d",
-			cfg.FairyRingNode.Protocol,
-			cfg.FairyRingNode.IP,
-			cfg.FairyRingNode.Port,
-		),
-		"/websocket",
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = client.Start()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	for i, eachClient := range validatorCosmosClients {
-		eachAddr := eachClient.CosmosClient.GetAddress()
-		_, err = eachClient.CosmosClient.BroadcastTx(&types.MsgRegisterValidator{
-			Creator: eachAddr,
-		}, true)
-		if err != nil {
-			if !strings.Contains(err.Error(), "validator already registered") {
-				log.Fatal(err)
-			}
-		}
-		log.Printf("[%d] %s Registered as Validator", i, eachAddr)
 	}
 
 	out, err := client.Subscribe(context.Background(), "", "tm.event = 'NewBlockHeader'")
@@ -287,6 +285,10 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 				nowI := i
 				nowEach := each
 				go func() {
+					if nowEach.CurrentShare == nil {
+						log.Printf("[%d] Current Share not found, client paused...", nowI)
+						return
+					}
 					log.Printf("[%d] Current Share Expires at: %d, in %d blocks | %v", nowI, nowEach.CurrentShareExpiryBlock, nowEach.CurrentShareExpiryBlock-uint64(height), nowEach.CurrentShare.Share)
 					if nowEach.PendingShare != nil {
 						log.Printf("[%d] Pending Share expires at: %d, in %d blocks | %v", nowI, nowEach.PendingShareExpiryBlock, nowEach.PendingShareExpiryBlock-uint64(height), nowEach.PendingShare.Share)
@@ -294,6 +296,7 @@ func StartFairyRingClient(cfg config.Config, keysDir string) {
 					// When it is time to switch key share
 					if nowEach.CurrentShareExpiryBlock != 0 && nowEach.CurrentShareExpiryBlock <= processHeight {
 						log.Printf("[%d] current share expired, trying to switch to the queued one...\n", nowI)
+						validatorCosmosClients[nowI].RemoveCurrentShare()
 						// But pending key share not found
 						isVerified := false
 						if nowEach.PendingShare == nil {
@@ -527,16 +530,31 @@ func handleNewPubKeyEvent(data map[string][]string) {
 			log.Printf("[%d] Error getting the pending keyshare: %s", nowI, err.Error())
 			return
 		}
-		validatorCosmosClients[nowI].SetPendingShare(&KeyShare{
-			Share: *newShare,
-			Index: index,
-		})
-		validatorCosmosClients[nowI].SetPendingShareExpiryBlock(expiryHeight)
+
+		if nowClient.CurrentShare == nil && nowClient.CurrentShareExpiryBlock == 0 {
+			validatorCosmosClients[nowI].SetCurrentShare(&KeyShare{
+				Share: *newShare,
+				Index: index,
+			})
+			validatorCosmosClients[nowI].SetCurrentShareExpiryBlock(expiryHeight)
+		} else {
+			validatorCosmosClients[nowI].SetPendingShare(&KeyShare{
+				Share: *newShare,
+				Index: index,
+			})
+			validatorCosmosClients[nowI].SetPendingShareExpiryBlock(expiryHeight)
+		}
+
 		log.Printf("Got [%d] Client's New Share: %v | Expires at: %d\n", nowI, newShare.Value, expiryHeight)
 
 		commits, err := validatorCosmosClients[nowI].CosmosClient.GetCommitments()
-		if err != nil {
-			log.Fatal("Error getting commitments:", err)
+		for err != nil {
+			if strings.Contains(err.Error(), "does not exists") {
+				time.Sleep(5)
+				commits, err = validatorCosmosClients[nowI].CosmosClient.GetCommitments()
+			} else {
+				log.Fatalf("Error getting commitments: %s", err.Error())
+			}
 		}
 
 		validatorCosmosClients[nowI].SetCommitments(commits)
