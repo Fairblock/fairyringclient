@@ -229,7 +229,8 @@ func StartFairyRingClient(cfg config.Config) {
 
 		valid, err := validatorCosmosClients[index].VerifyShare(commits.ActiveCommitments, false)
 		if err != nil {
-			log.Fatal("Error verifying active key share:", err)
+			log.Println("Error verifying active key share:", err)
+			validatorCosmosClients[index].Pause()
 		}
 		if !valid {
 			log.Printf("[%d] Active key share is invalid, Pausing the client...", index)
