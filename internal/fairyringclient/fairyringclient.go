@@ -191,6 +191,13 @@ func StartFairyRingClient(cfg config.Config) {
 
 		validatorCosmosClients[index].SetCurrentShareExpiryBlock(pubKeys.ActivePubKey.Expiry)
 		log.Println("Current Share Expiry Block set to: ", validatorCosmosClients[index].CurrentShareExpiryBlock)
+
+		validatorCosmosClients[index].SetCurrentShare(&KeyShare{
+			Share: *share,
+			Index: shareIndex,
+		})
+		log.Printf("[%d] Updated current share: %v", index, validatorCosmosClients[index].CurrentShare)
+
 		// Queued Pub key exists on pep module
 		if len(pubKeys.QueuedPubKey.PublicKey) > 1 && pubKeys.QueuedPubKey.Expiry > 0 {
 			previousShare, previousShareIndex, err := shareClient.GetLastShare(getNowStr())
