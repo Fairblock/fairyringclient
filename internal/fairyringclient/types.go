@@ -149,6 +149,11 @@ func (v *ValidatorClients) VerifyShare(commitments *types.Commitments, verifyPen
 	}
 
 	targetShare := v.CurrentShare
+
+	if targetShare == nil {
+		return false, errors.New("active share not found")
+	}
+
 	if verifyPendingShare {
 		if v.PendingShare == nil {
 			return false, errors.New("verify pending share but pending share not found")
