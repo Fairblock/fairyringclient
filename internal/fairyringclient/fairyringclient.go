@@ -181,6 +181,10 @@ func StartFairyRingClient(cfg config.Config) {
 		share, shareIndex, err := shareClient.GetShare(getNowStr())
 
 		if err != nil {
+			if strings.Contains(err.Error(), "empty") {
+				log.Printf("[%d] Couldn't find your share in API...", index)
+				break
+			}
 			log.Fatal("Error getting share:", err)
 		}
 		log.Printf("Got share: %s | Index: %d", share, shareIndex)
