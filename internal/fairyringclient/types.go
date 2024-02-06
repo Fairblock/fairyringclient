@@ -144,6 +144,10 @@ func (v *ValidatorClients) UpdateAndVerifyPendingShare(currentBlockHeight int64)
 func (v *ValidatorClients) VerifyShare(commitments *types.Commitments, verifyPendingShare bool) (bool, error) {
 	s := bls.NewBLS12381Suite()
 
+	if len(commitments.Commitments) == 0 {
+		return false, errors.New("Commitment provided is empty")
+	}
+
 	targetShare := v.CurrentShare
 	if verifyPendingShare {
 		if v.PendingShare == nil {

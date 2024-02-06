@@ -238,7 +238,7 @@ func StartFairyRingClient(cfg config.Config) {
 			log.Printf("[%d] Current Key Share is valid !", index)
 		}
 
-		if validatorCosmosClients[index].PendingShare != nil && commits.QueuedCommitments != nil {
+		if validatorCosmosClients[index].PendingShare != nil && len(commits.QueuedCommitments.Commitments) > 0 {
 			log.Printf("[%d] Verifying Pending Key Share...", index)
 			valid, err := validatorCosmosClients[index].VerifyShare(commits.QueuedCommitments, true)
 			if err != nil {
@@ -388,6 +388,7 @@ func StartFairyRingClient(cfg config.Config) {
 
 						if err != nil {
 							log.Printf("[%d] Submit KeyShare for Height %s ERROR: %s\n", nowI, processHeightStr, err.Error())
+							return
 						}
 						txResp, err := nowEach.CosmosClient.WaitForTx(resp.TxHash, time.Second)
 						if err != nil {
