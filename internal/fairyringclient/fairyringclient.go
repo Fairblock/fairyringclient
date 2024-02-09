@@ -3,16 +3,17 @@ package fairyringclient
 import (
 	"context"
 	"encoding/hex"
-	"fairyring/x/keyshare/types"
 	"fairyringclient/config"
 	"fairyringclient/pkg/cosmosClient"
 	"fairyringclient/pkg/shareAPIClient"
 	"fmt"
+	"net/http"
+	"strings"
+
+	"github.com/Fairblock/fairyring/x/keyshare/types"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"net/http"
-	"strings"
 
 	"log"
 	"os"

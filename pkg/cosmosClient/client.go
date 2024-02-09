@@ -2,11 +2,15 @@ package cosmosClient
 
 import (
 	"context"
-	"cosmossdk.io/math"
 	"encoding/hex"
-	"fairyring/app"
-	keysharetypes "fairyring/x/keyshare/types"
-	"fairyring/x/pep/types"
+	"log"
+	"strings"
+	"time"
+
+	"cosmossdk.io/math"
+	"github.com/Fairblock/fairyring/app"
+	keysharetypes "github.com/Fairblock/fairyring/x/keyshare/types"
+	"github.com/Fairblock/fairyring/x/pep/types"
 	clienttx "github.com/cosmos/cosmos-sdk/client/tx"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
@@ -18,9 +22,6 @@ import (
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
-	"log"
-	"strings"
-	"time"
 )
 
 const (

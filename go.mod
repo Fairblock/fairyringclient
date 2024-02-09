@@ -6,8 +6,8 @@ toolchain go1.21.0
 
 require (
 	cosmossdk.io/math v1.0.1
-	fairyring v0.0.0-00010101000000-000000000000
 	github.com/FairBlock/DistributedIBE v0.0.0-20230528025616-f58fb2b93eaf
+	github.com/Fairblock/fairyring v0.3.2
 	github.com/cometbft/cometbft v0.37.2
 	github.com/cosmos/cosmos-sdk v0.47.3
 	github.com/decred/dcrd/dcrec/secp256k1 v1.0.4
@@ -178,7 +178,5 @@ require (
 	pgregory.net/rapid v0.5.5 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
-
-replace fairyring => ../fairyring/
 
 replace github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1

@@ -219,6 +219,8 @@ github.com/ChainSafe/go-schnorrkel v0.0.0-20200405005733-88cbf1b4c40d/go.mod h1:
 github.com/DataDog/datadog-go v3.2.0+incompatible/go.mod h1:LButxg5PwREeZtORoXG3tL4fMGNddJ+vMq1mwgfaqoQ=
 github.com/FairBlock/DistributedIBE v0.0.0-20230528025616-f58fb2b93eaf h1:b4eYrFmDvCv1cA4dIPsmH6cGhURs6aIERShJczjwFuA=
 github.com/FairBlock/DistributedIBE v0.0.0-20230528025616-f58fb2b93eaf/go.mod h1:qXpLBzZiSdWoweJkE/lAIPedf6GOl7WsYM8rxrZCCDk=
+github.com/Fairblock/fairyring v0.3.2 h1:2Sc7QlXqTWEugO/G2gx/A4pCh4gtaunN1NGoPujmq6o=
+github.com/Fairblock/fairyring v0.3.2/go.mod h1:T4NuT+4dcVhtfhAohqZzUVftueUTr/jFKQ0amS1XcFA=
 github.com/Knetic/govaluate v3.0.1-0.20171022003610-9aa49832a739+incompatible/go.mod h1:r7JcOSlj0wfOMncg0iLm8Leh48TZaKVeNIfJntJ2wa0=
 github.com/Microsoft/go-winio v0.6.1 h1:9/kr64B9VUZrLm5YYwbGtUJnMgqWVOdUAXu6Migciow=
 github.com/Microsoft/go-winio v0.6.1/go.mod h1:LRdKpFKfdobln8UmuiYcKPot9D2v6svN5+sAH+4kjUM=

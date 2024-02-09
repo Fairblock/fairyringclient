@@ -2,14 +2,15 @@ package fairyringclient
 
 import (
 	"encoding/hex"
-	"fairyring/x/keyshare/types"
 	"fairyringclient/pkg/cosmosClient"
 	"fairyringclient/pkg/shareAPIClient"
+	"math"
+
 	distIBE "github.com/FairBlock/DistributedIBE"
+	"github.com/Fairblock/fairyring/x/keyshare/types"
 	"github.com/drand/kyber"
 	bls "github.com/drand/kyber-bls12381"
 	"github.com/pkg/errors"
-	"math"
 )
 
 type KeyShare struct {

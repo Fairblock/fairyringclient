@@ -1,13 +1,14 @@
 package cmd
 
 import (
-	"fairyring/x/keyshare/types"
 	"fairyringclient/config"
 	"fairyringclient/pkg/cosmosClient"
 	"fmt"
-	"github.com/spf13/cobra"
 	"log"
 	"time"
+
+	"github.com/Fairblock/fairyring/x/keyshare/types"
+	"github.com/spf13/cobra"
 )
 
 // delegateAdd represents the delegate add command
