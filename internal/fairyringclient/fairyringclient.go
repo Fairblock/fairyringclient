@@ -317,7 +317,7 @@ func StartFairyRingClient(cfg config.Config) {
 							valid, err := validatorCosmosClients[nowI].UpdateAndVerifyPendingShare(height)
 
 							if err != nil {
-								log.Printf("[%d] Error getting pending share from API.", nowI)
+								log.Printf("[%d] Error getting pending share from API: %s", nowI, err.Error())
 								return
 							}
 
@@ -545,13 +545,17 @@ func handleNewPubKeyEvent(data map[string][]string) {
 			return
 		}
 
-		if nowClient.CurrentShare == nil && nowClient.CurrentShareExpiryBlock == 0 {
+		if nowClient.CurrentShare == nil && nowClient.CurrentShareExpiryBlock == 0 &&
+			nowClient.PendingShare == nil && nowClient.PendingShareExpiryBlock == 0 {
 			validatorCosmosClients[nowI].SetCurrentShare(&KeyShare{
 				Share: *newShare,
 				Index: index,
 			})
 			validatorCosmosClients[nowI].SetCurrentShareExpiryBlock(expiryHeight)
 		} else {
+			if nowClient.PendingShare != nil && nowClient.PendingShareExpiryBlock > 0 {
+				validatorCosmosClients[nowI].ActivatePendingShare()
+			}
 			validatorCosmosClients[nowI].SetPendingShare(&KeyShare{
 				Share: *newShare,
 				Index: index,
