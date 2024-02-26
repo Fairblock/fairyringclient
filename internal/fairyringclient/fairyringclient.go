@@ -280,26 +280,19 @@ func StartFairyRingClient(cfg config.Config) {
 			newBlockHeader := result.Data.(tmtypes.EventDataNewBlockHeader)
 			log.Printf("New Height: %d", newBlockHeader.Header.Height)
 
-			outArr2 := make([]string, 0)
-			for _, e := range newBlockHeader.ResultBeginBlock.GetEvents() {
-				outArr2 = append(outArr2, e.Type)
-			}
-			log.Printf("Begin BLock Events Type: %v", outArr2)
-
-			outArr := make([]string, 0)
-			for _, e := range newBlockHeader.ResultEndBlock.GetEvents() {
-				outArr = append(outArr, e.Type)
-			}
-			log.Printf("End BLock Events Type: %v", outArr)
-
 			for _, e := range newBlockHeader.ResultEndBlock.GetEvents() {
 				if e.Type != "start-send-general-keyshare" {
 					continue
 				}
+				log.Println("Found event")
+				log.Printf("Attributes: %v", e.Attributes)
 				for _, a := range e.Attributes {
+
 					if a.Key != "start-send-general-keyshare-identity" {
 						continue
 					}
+
+					log.Printf("Found attribute: %s %s", a.Key, a.Value)
 
 					identity := a.Value
 					if len(identity) < 1 {
