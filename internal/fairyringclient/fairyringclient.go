@@ -21,6 +21,7 @@ import (
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	tmclient "github.com/cometbft/cometbft/rpc/client/http"
+	tmtypes "github.com/cometbft/cometbft/types"
 )
 
 var (
@@ -253,29 +254,93 @@ func StartFairyRingClient(cfg config.Config) {
 	//	}
 	//}
 	//
-	//out, err := client.Subscribe(context.Background(), "", "tm.event = 'NewBlockHeader'")
-	//if err != nil {
-	//	log.Fatal(err)
-	//}
-
-	txOut, err := client.Subscribe(context.Background(), "", "tm.event = 'Tx'")
+	out, err := client.Subscribe(context.Background(), "", "tm.event = 'NewBlockHeader'")
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	//txOut, err := client.Subscribe(context.Background(), "", "tm.event = 'Tx'")
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
 
 	defer client.Stop()
 
 	// s := bls.NewBLS12381Suite()
 
-	handleTxEvents(txOut)
+	// handleTxEvents(txOut)
 	//
 	//http.Handle("/metrics", promhttp.Handler())
 	//log.Printf("Metrics is listening on port: %d\n", cfg.MetricsPort)
 	//go http.ListenAndServe(fmt.Sprintf(":%d", cfg.MetricsPort), nil)
 	//
-	//for {
-	//	select {
-	//	case result := <-out:
+	for {
+		select {
+		case result := <-out:
+			newBlockHeader := result.Data.(tmtypes.EventDataNewBlockHeader)
+			log.Printf("New Height: %d", newBlockHeader.Header.Height)
+			outArr := make([]string, 0)
+			for _, e := range newBlockHeader.ResultEndBlock.GetEvents() {
+				outArr = append(outArr, e.Type)
+			}
+			log.Printf("End BLock Events Type: %v", outArr)
+
+			for _, e := range newBlockHeader.ResultEndBlock.GetEvents() {
+				if e.Type != "start-send-general-keyshare" {
+					continue
+				}
+				for _, a := range e.Attributes {
+					if a.Key != "start-send-general-keyshare-identity" {
+						continue
+					}
+
+					identity := a.Value
+					if len(identity) < 1 {
+						return
+					}
+
+					log.Printf("Start Submitting General Key Share for identity: %s", identity)
+					s := bls.NewBLS12381Suite()
+					for i, eachClient := range validatorCosmosClients {
+						nowI := i
+						nowClient := eachClient
+
+						currentShare := nowClient.CurrentShare
+
+						extractedKey := distIBE.Extract(s, currentShare.Share.Value, uint32(currentShare.Index), []byte(identity))
+						extractedKeyBinary, err := extractedKey.SK.MarshalBinary()
+						if err != nil {
+							log.Fatal(err)
+						}
+						extractedKeyHex := hex.EncodeToString(extractedKeyBinary)
+
+						log.Printf("Derived General Key Share: %s\n", extractedKeyHex)
+
+						resp, err := nowClient.CosmosClient.BroadcastTx(&types.MsgCreateGeneralKeyShare{
+							Creator:       nowClient.CosmosClient.GetAddress(),
+							KeyShare:      extractedKeyHex,
+							KeyShareIndex: currentShare.Index,
+							IdType:        "private-gov-identity",
+							IdValue:       identity,
+						}, true)
+						if err != nil {
+							log.Printf("[%d] Submit General KeyShare for Identity %s ERROR: %s\n", nowI, identity, err.Error())
+						}
+						txResp, err := nowClient.CosmosClient.WaitForTx(resp.TxHash, time.Second)
+						if err != nil {
+							log.Printf("[%d] General KeyShare for Identity %s Failed: %s\n", nowI, identity, err.Error())
+							return
+						}
+						if txResp.TxResponse.Code != 0 {
+							log.Printf("[%d] General KeyShare for Identity %s Failed: %s\n", nowI, identity, txResp.TxResponse.RawLog)
+							return
+						}
+						log.Printf("[%d] Submit General KeyShare for Identity %s Confirmed\n", nowI, identity)
+					}
+				}
+			}
+		}
+	}
 	//		newBlockHeader := result.Data.(tmtypes.EventDataNewBlockHeader)
 	//
 	//		height := newBlockHeader.Header.Height
