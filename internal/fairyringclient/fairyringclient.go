@@ -279,6 +279,13 @@ func StartFairyRingClient(cfg config.Config) {
 		case result := <-out:
 			newBlockHeader := result.Data.(tmtypes.EventDataNewBlockHeader)
 			log.Printf("New Height: %d", newBlockHeader.Header.Height)
+
+			outArr2 := make([]string, 0)
+			for _, e := range newBlockHeader.ResultBeginBlock.GetEvents() {
+				outArr2 = append(outArr2, e.Type)
+			}
+			log.Printf("Begin BLock Events Type: %v", outArr2)
+
 			outArr := make([]string, 0)
 			for _, e := range newBlockHeader.ResultEndBlock.GetEvents() {
 				outArr = append(outArr, e.Type)
