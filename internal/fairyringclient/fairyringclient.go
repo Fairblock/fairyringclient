@@ -289,6 +289,8 @@ func StartFairyRingClient(cfg config.Config) {
 			height := newBlockHeader.Header.Height
 			fmt.Println("")
 
+			go handleEndBlockEvents(newBlockHeader.ResultEndBlock.GetEvents())
+
 			processHeight := uint64(height + 1)
 			processHeightStr := strconv.FormatUint(processHeight, 10)
 
@@ -451,9 +453,6 @@ func handleTxEvents(txOut <-chan coretypes.ResultEvent) {
 		case result := <-txOut:
 			for k := range result.Events {
 				switch k {
-				case "start-send-general-keyshare.start-send-general-keyshare-identity":
-					handleStartSubmitGeneralKeyShareEvent(result.Events)
-					break
 				case "queued-pubkey-created.queued-pubkey-created-pubkey":
 					handleNewPubKeyEvent(result.Events)
 					break
@@ -463,17 +462,30 @@ func handleTxEvents(txOut <-chan coretypes.ResultEvent) {
 	}
 }
 
-func handleStartSubmitGeneralKeyShareEvent(data map[string][]string) {
-	id, found := data["start-send-general-keyshare.start-send-general-keyshare-identity"]
-	if !found {
-		return
-	}
+func handleEndBlockEvents(events []abciTypes.Event) {
+	for _, e := range events {
+		if e.Type != "start-send-general-keyshare" {
+			continue
+		}
+		for _, a := range e.Attributes {
 
-	if len(id) < 1 {
-		return
-	}
+			if a.Key != "start-send-general-keyshare-identity" {
+				continue
+			}
 
-	identity := id[0]
+			identity := a.Value
+			if len(identity) < 1 {
+				log.Printf("Empty Identity detected in start send general key share event...")
+				return
+			}
+
+			handleStartSubmitGeneralKeyShareEvent(identity)
+			return
+		}
+	}
+}
+
+func handleStartSubmitGeneralKeyShareEvent(identity string) {
 
 	log.Printf("Start Submitting General Key Share for identity: %s", identity)
 	s := bls.NewBLS12381Suite()

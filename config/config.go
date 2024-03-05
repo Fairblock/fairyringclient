@@ -14,7 +14,7 @@ const (
 	DefaultMetricsPort    = 2222
 	DefaultPauseThreshold = 5
 	DefaultFolderName     = ".fairyringclient"
-	DefaultChainID        = "fairytest-3"
+	DefaultChainID        = "fairyring-testnet-1"
 	DefaultDenom          = "ufairy"
 	DefaultShareAPIUrl    = "https://7d3q6i0uk2.execute-api.us-east-1.amazonaws.com"
 )
