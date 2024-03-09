@@ -551,12 +551,12 @@ func handleStartSubmitGeneralKeyShareEvent(identity string) {
 }
 
 func handleNewPubKeyEvent(data map[string][]string) {
-	pubKey, found := data["queued-pubkey-created.queued-pubkey-created-pubkey"]
+	pubKey, found := data["queued-pubkey-created.pubkey"]
 	if !found {
 		return
 	}
 
-	expiryHeightStr, found := data["queued-pubkey-created.queued-pubkey-created-expiry-height"]
+	expiryHeightStr, found := data["queued-pubkey-created.active-pubkey-expiry-height"]
 	if !found {
 		return
 	}
