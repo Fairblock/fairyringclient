@@ -476,7 +476,7 @@ func handleTxEvents(txOut <-chan coretypes.ResultEvent) {
 		case result := <-txOut:
 			for k := range result.Events {
 				switch k {
-				case "queued-pubkey-created.queued-pubkey-created-pubkey":
+				case "queued-pubkey-created.pubkey":
 					handleNewPubKeyEvent(result.Events)
 					break
 				}
