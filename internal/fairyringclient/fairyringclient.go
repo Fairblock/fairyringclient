@@ -240,32 +240,9 @@ func StartFairyRingClient(cfg config.Config) {
 			log.Println("Error verifying active key share:", err)
 			validatorCosmosClients[index].Pause()
 		}
-		if !valid && validatorCosmosClients[index].PendingShareExpiryBlock == 0 {
-
-			previousShare, previousShareIndex, err := shareClient.GetLastShare(getNowStr())
-			if err != nil {
-				log.Println("Error getting last key share:", err)
-				validatorCosmosClients[index].Pause()
-			}
-
-			validatorCosmosClients[index].SetCurrentShare(&KeyShare{
-				Share: *previousShare,
-				Index: previousShareIndex,
-			})
-
-			isLastShareValid, err := validatorCosmosClients[index].VerifyShare(commits.ActiveCommitments, false)
-			if err != nil {
-				log.Println("Error verifying active key share:", err)
-				validatorCosmosClients[index].Pause()
-			}
-
-			if isLastShareValid {
-				log.Printf("[%d] Last Share works on current round, switched the keys...", index)
-			} else {
-				log.Printf("[%d] Active key share & Last Key Share are invalid, Pausing the client...", index)
-				validatorCosmosClients[index].Pause()
-			}
-
+		if !valid {
+			log.Printf("[%d] Active key share is invalid, Pausing the client...", index)
+			validatorCosmosClients[index].Pause()
 		} else {
 			log.Printf("[%d] Current Key Share is valid !", index)
 		}
