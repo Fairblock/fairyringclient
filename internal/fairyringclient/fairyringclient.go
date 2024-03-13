@@ -399,6 +399,12 @@ func StartFairyRingClient(cfg config.Config) {
 
 						if err != nil {
 							log.Printf("[%d] Submit KeyShare for Height %s ERROR: %s\n", nowI, processHeightStr, err.Error())
+							if strings.Contains(err.Error(), "transaction indexing is disabled") {
+								log.Fatal("Transaction indexing is disabled on the node, please enable it or use another node with tx indexing, exiting fairyringclient...")
+							}
+							if strings.Contains(err.Error(), "account sequence mismatch") {
+								log.Fatal("Account sequence mismatch, exiting fairyringclient...")
+							}
 							return
 						}
 						txResp, err := nowEach.CosmosClient.WaitForTx(resp.TxHash, time.Second)
