@@ -16,7 +16,6 @@ const (
 	DefaultFolderName     = ".fairyringclient"
 	DefaultChainID        = "fairyring-testnet-1"
 	DefaultDenom          = "ufairy"
-	DefaultShareAPIUrl    = "https://7d3q6i0uk2.execute-api.us-east-1.amazonaws.com"
 )
 
 type Node struct {
@@ -30,9 +29,7 @@ type Node struct {
 
 type Config struct {
 	FairyRingNode              Node
-	PrivateKeys                []string
-	ShareAPIUrl                string
-	IsManager                  bool
+	PrivateKey                 string
 	TotalValidatorNum          uint64
 	MasterPrivateKey           string
 	InvalidSharePauseThreshold uint64
@@ -125,10 +122,10 @@ func (c *Config) ExportConfig() error {
 }
 
 func DefaultConfig(withCosmosKey bool) Config {
-	var privateKeys []string
+	var privateKey string
 
 	if withCosmosKey {
-		privateKeys = append(privateKeys, crypto.CRandHex(64))
+		privateKey = crypto.CRandHex(64)
 	}
 
 	return Config{
@@ -140,9 +137,7 @@ func DefaultConfig(withCosmosKey bool) Config {
 			Denom:    DefaultDenom,
 			ChainID:  DefaultChainID,
 		},
-		PrivateKeys:                privateKeys,
-		ShareAPIUrl:                DefaultShareAPIUrl,
-		IsManager:                  false,
+		PrivateKey:                 privateKey,
 		TotalValidatorNum:          0,
 		MasterPrivateKey:           "",
 		InvalidSharePauseThreshold: DefaultPauseThreshold,
@@ -158,9 +153,7 @@ func updateConfig(c Config) {
 	viper.Set("FairyRingNode.denom", c.FairyRingNode.Denom)
 	viper.Set("FairyRingNode.chainID", c.FairyRingNode.ChainID)
 
-	viper.Set("ShareAPIUrl", c.ShareAPIUrl)
-	viper.Set("PrivateKeys", c.PrivateKeys)
-	viper.Set("IsManager", c.IsManager)
+	viper.Set("PrivateKey", c.PrivateKey)
 
 	viper.Set("InvalidSharePauseThreshold", c.InvalidSharePauseThreshold)
 	viper.Set("MetricsPort", c.MetricsPort)
@@ -174,10 +167,8 @@ func setInitialConfig(c Config) {
 	viper.SetDefault("FairyRingNode.denom", c.FairyRingNode.Denom)
 	viper.SetDefault("FairyRingNode.chainID", c.FairyRingNode.ChainID)
 
-	viper.SetDefault("ShareAPIUrl", c.ShareAPIUrl)
-	viper.SetDefault("PrivateKeys", c.PrivateKeys)
-	viper.SetDefault("IsManager", c.IsManager)
-
+	viper.SetDefault("PrivateKey", c.PrivateKey)
+	
 	viper.SetDefault("InvalidSharePauseThreshold", c.InvalidSharePauseThreshold)
 	viper.SetDefault("MetricsPort", c.MetricsPort)
 }

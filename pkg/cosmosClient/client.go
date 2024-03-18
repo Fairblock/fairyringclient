@@ -2,7 +2,11 @@ package cosmosClient
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/hex"
+	distIBE "github.com/FairBlock/DistributedIBE"
+	dcrdSecp256k1 "github.com/decred/dcrd/dcrec/secp256k1"
+	bls "github.com/drand/kyber-bls12381"
 	"log"
 	"strings"
 	"time"
@@ -32,11 +36,12 @@ const (
 type CosmosClient struct {
 	authClient          authtypes.QueryClient
 	txClient            tx.ServiceClient
-	grpcConn            grpc.ClientConn
+	grpcConn            *grpc.ClientConn
 	bankQueryClient     banktypes.QueryClient
 	pepQueryClient      types.QueryClient
 	keyshareQueryClient keysharetypes.QueryClient
 	privateKey          secp256k1.PrivKey
+	dcrdPrivKey         dcrdSecp256k1.PrivateKey
 	publicKey           cryptotypes.PubKey
 	account             authtypes.BaseAccount
 	accAddress          cosmostypes.AccAddress
@@ -81,6 +86,8 @@ func NewCosmosClient(
 	pubKey := privateKey.PubKey()
 	address := pubKey.Address()
 
+	dcrdPrivKey, _ := dcrdSecp256k1.PrivKeyFromBytes(keyBytes)
+
 	cfg := cosmostypes.GetConfig()
 	cfg.SetBech32PrefixForAccount("fairy", "fairypub")
 	cfg.SetBech32PrefixForValidator("fairyvaloper", "fairyvaloperpub")
@@ -112,8 +119,9 @@ func NewCosmosClient(
 		txClient:            tx.NewServiceClient(grpcConn),
 		pepQueryClient:      pepeClient,
 		keyshareQueryClient: keyshareClient,
-		grpcConn:            *grpcConn,
+		grpcConn:            grpcConn,
 		privateKey:          privateKey,
+		dcrdPrivKey:         *dcrdPrivKey,
 		account:             baseAccount,
 		accAddress:          accAddr,
 		publicKey:           pubKey,
@@ -132,15 +140,55 @@ func (c *CosmosClient) GetCommitments() (*keysharetypes.QueryCommitmentsResponse
 	return resp, nil
 }
 
-func (c *CosmosClient) GetActivePubKey() (*types.QueryPubKeyResponse, error) {
-	resp, err := c.pepQueryClient.PubKey(
+func (c *CosmosClient) GetActivePubKey() (*keysharetypes.QueryPubKeyResponse, error) {
+	resp, err := c.keyshareQueryClient.PubKey(
 		context.Background(),
-		&types.QueryPubKeyRequest{},
+		&keysharetypes.QueryPubKeyRequest{},
 	)
 	if err != nil {
 		return nil, err
 	}
 	return resp, nil
+}
+
+func (c *CosmosClient) GetKeyShare(getPendingShare bool) (*distIBE.Share, uint64, uint64, error) {
+	pubKey, err := c.GetActivePubKey()
+	if err != nil {
+		return nil, 0, 0, err
+	}
+
+	targetEncKeyShareList := pubKey.ActivePubKey.EncryptedKeyShares
+
+	if getPendingShare {
+		targetEncKeyShareList = pubKey.QueuedPubKey.EncryptedKeyShares
+	}
+
+	if len(targetEncKeyShareList) == 0 {
+		return nil, 0, 0, errors.New("encrypted shares array for target round is empty")
+	}
+
+	for index, val := range targetEncKeyShareList {
+		if val.Validator == c.GetAddress() {
+			decryptedByte, err := c.decryptShare(val.Data)
+			if err != nil {
+				return nil, 0, 0, err
+			}
+			keyShareIndex := index + 1
+			parsedShare, err := c.parseShare(decryptedByte, int64(keyShareIndex))
+			if err != nil {
+				return nil, 0, 0, err
+			}
+
+			expiryHeight := pubKey.ActivePubKey.Expiry
+
+			if getPendingShare {
+				expiryHeight = pubKey.QueuedPubKey.Expiry
+			}
+
+			return parsedShare, uint64(keyShareIndex), expiryHeight, nil
+		}
+	}
+	return nil, 0, 0, errors.New("encrypted share for your validator not found")
 }
 
 func (c *CosmosClient) GetLatestHeight() (uint64, error) {
@@ -166,28 +214,6 @@ func (c *CosmosClient) GetBalance(denom string) (*math.Int, error) {
 		return nil, err
 	}
 	return &resp.Balance.Amount, nil
-}
-
-func (c *CosmosClient) SendToken(target, denom string, amount math.Int, adjustGas bool) (*cosmostypes.TxResponse, error) {
-	resp, err := c.BroadcastTx(&banktypes.MsgSend{
-		FromAddress: c.GetAddress(),
-		ToAddress:   target,
-		Amount:      cosmostypes.NewCoins(cosmostypes.NewCoin(denom, amount)),
-	}, adjustGas)
-	return resp, err
-}
-
-func (c *CosmosClient) MultiSend(denom string, totalAmount, eachAmt math.Int, targets []cosmostypes.AccAddress, adjustGas bool) (*cosmostypes.TxResponse, error) {
-	outputs := make([]banktypes.Output, len(targets))
-	for i, each := range targets {
-		outputs[i] = banktypes.NewOutput(each, cosmostypes.NewCoins(cosmostypes.NewCoin(denom, eachAmt)))
-	}
-	resp, err := c.BroadcastTx(&banktypes.MsgMultiSend{
-		Inputs:  []banktypes.Input{banktypes.NewInput(c.accAddress, cosmostypes.NewCoins(cosmostypes.NewCoin(denom, totalAmount)))},
-		Outputs: outputs,
-	}, adjustGas)
-
-	return resp, err
 }
 
 func (c *CosmosClient) GetAddress() string {
@@ -234,6 +260,32 @@ func (c *CosmosClient) BroadcastTx(msg cosmostypes.Msg, adjustGas bool) (*cosmos
 	return resp.TxResponse, c.handleBroadcastResult(resp.TxResponse, err)
 }
 
+func (c *CosmosClient) decryptShare(shareCipher string) ([]byte, error) {
+	decoded, err := base64.StdEncoding.DecodeString(shareCipher)
+	if err != nil {
+		return nil, err
+	}
+
+	plainByte, err := dcrdSecp256k1.Decrypt(&c.dcrdPrivKey, decoded)
+	if err != nil {
+		return nil, err
+	}
+
+	return plainByte, nil
+}
+
+func (c *CosmosClient) parseShare(shareByte []byte, index int64) (*distIBE.Share, error) {
+	parsedShare := bls.NewKyberScalar()
+	err := parsedShare.UnmarshalBinary(shareByte)
+	if err != nil {
+		return nil, err
+	}
+	return &distIBE.Share{
+		Index: bls.NewKyberScalar().SetInt64(index),
+		Value: parsedShare,
+	}, nil
+}
+
 func (c *CosmosClient) WaitForTx(hash string, rate time.Duration) (*tx.GetTxResponse, error) {
 	for {
 		resp, err := c.txClient.GetTx(context.Background(), &tx.GetTxRequest{Hash: hash})
@@ -269,7 +321,7 @@ func (c *CosmosClient) signTxMsg(msg cosmostypes.Msg, adjustGas bool) ([]byte, e
 			WithSequence(c.account.Sequence).
 			WithGasAdjustment(defaultGasAdjustment)
 
-		_, newGasLimit, err = clienttx.CalculateGas(&c.grpcConn, txf, msg)
+		_, newGasLimit, err = clienttx.CalculateGas(c.grpcConn, txf, msg)
 		if err != nil {
 			return nil, err
 		}

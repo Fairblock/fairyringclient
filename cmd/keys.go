@@ -19,7 +19,7 @@ var keysCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(keysCmd)
 
-	keysCmd.AddCommand(keysCosmosAdd)
-	keysCmd.AddCommand(keysCosmosList)
+	keysCmd.AddCommand(keysCosmosSet)
+	keysCmd.AddCommand(keysCosmosShow)
 	keysCmd.AddCommand(keysCosmosRemove)
 }
