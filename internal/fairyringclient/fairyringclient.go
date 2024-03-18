@@ -310,8 +310,8 @@ func StartFairyRingClient(cfg config.Config) {
 						if nowEach.PendingShareExpiryBlock == nowEach.CurrentShareExpiryBlock {
 							log.Printf("[%d] Pending Share Expiry is same as Current Share, updating expiry height...", nowI)
 							pubKeys, _ := nowEach.CosmosClient.GetActivePubKey()
-							nowEach.SetCurrentShareExpiryBlock(pubKeys.ActivePubKey.Expiry)
-							nowEach.SetPendingShareExpiryBlock(pubKeys.QueuedPubKey.Expiry)
+							validatorCosmosClients[i].SetCurrentShareExpiryBlock(pubKeys.ActivePubKey.Expiry)
+							validatorCosmosClients[i].SetPendingShareExpiryBlock(pubKeys.QueuedPubKey.Expiry)
 						}
 					}
 					// When it is time to switch key share
