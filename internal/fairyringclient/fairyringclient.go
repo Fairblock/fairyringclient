@@ -65,36 +65,8 @@ func StartFairyRingClient(cfg config.Config) {
 
 	validatorCosmosClient.RegisterValidatorSet()
 
-	pubKeys, err := validatorCosmosClient.CosmosClient.GetActivePubKey()
-	if err != nil {
-		if strings.Contains(err.Error(), "does not exists") {
-			log.Println("Active pub key does not exists...")
-		}
-		log.Fatal("Error getting active pub key on KeyShare module: ", err)
-	}
-
-	log.Printf("Active Pub Key: %s Expires at: %d | Queued: %s Expires at: %d\n",
-		pubKeys.ActivePubKey.PublicKey,
-		pubKeys.ActivePubKey.Expiry,
-		pubKeys.QueuedPubKey.PublicKey,
-		pubKeys.QueuedPubKey.Expiry,
-	)
-
-	err = validatorCosmosClient.UpdateKeyShareFromChain(false)
-	if err != nil {
-		log.Fatalf("Error getting current key share from the chain when starting the client: %s", err.Error())
-	}
-	log.Println("Successfully Updated Key Share for current round")
-
-	// Queued Pub key exists on pep module
-	if len(pubKeys.QueuedPubKey.PublicKey) > 1 && pubKeys.QueuedPubKey.Expiry > 0 {
-		err = validatorCosmosClient.UpdateKeyShareFromChain(true)
-		if err != nil {
-			log.Printf("Error getting pending key share from the chain when starting the client: %s\n", err.Error())
-		} else {
-			log.Println("Successfully Updated Key Share for the next round")
-		}
-	}
+	_ = validatorCosmosClient.UpdateKeyShareFromChain(false)
+	_ = validatorCosmosClient.UpdateKeyShareFromChain(true)
 
 	out, err := client.Subscribe(context.Background(), "", "tm.event = 'NewBlockHeader'")
 	if err != nil {
@@ -130,8 +102,10 @@ func StartFairyRingClient(cfg config.Config) {
 			log.Printf("Latest Block Height: %d | Deriving Share for Height: %s\n", height, processHeightStr)
 
 			if validatorCosmosClient.CurrentShare == nil {
-				log.Println("Current Share not found, client paused...")
-				return
+				log.Println("Current Share not found, Getting Share from FairyRing")
+				if err := validatorCosmosClient.UpdateKeyShareFromChain(false); err != nil {
+					continue
+				}
 			}
 			log.Printf("Current Share Expires at: %d, in %d blocks | %v",
 				validatorCosmosClient.CurrentShareExpiryBlock,
@@ -147,38 +121,34 @@ func StartFairyRingClient(cfg config.Config) {
 			}
 			// When it is time to switch key share
 			if validatorCosmosClient.CurrentShareExpiryBlock != 0 && validatorCosmosClient.CurrentShareExpiryBlock <= processHeight {
-				log.Println("current share expired, trying to switch to the queued one...")
+				log.Println("Current share expired, Switching to the queued one")
 				validatorCosmosClient.RemoveCurrentShare()
 
 				// But pending key share not found
 				if validatorCosmosClient.PendingShare == nil {
-					log.Println("Unable to switch to latest share, pending share not found, trying to get pending share...")
-					err := validatorCosmosClient.UpdateKeyShareFromChain(true)
-					if err != nil {
-						log.Printf("Error getting pending share from API: %s", err.Error())
+					log.Println("Pending share not found, Getting share from FairyRing now")
+					if err = validatorCosmosClient.UpdateKeyShareFromChain(true); err != nil {
 						continue
 					}
-
-					log.Println("Successfully Got Valid Pending Share from the chain.")
-					log.Println(validatorCosmosClient.PendingShare)
 				}
 
 				validatorCosmosClient.ResetInvalidShareNum()
 
 				if validatorCosmosClient.Paused {
 					validatorCosmosClient.Unpause()
-					log.Printf("Client Unpaused, current invalid share count: %d...\n", validatorCosmosClient.InvalidShareInARow)
+					log.Printf("Client Unpaused, Current invalid share count: %d\n", validatorCosmosClient.InvalidShareInARow)
 				}
 
 				validatorCosmosClient.ActivatePendingShare()
-				log.Println("Activated pending key share, active share updated...")
-				log.Printf("New Share: %v\n", validatorCosmosClient.CurrentShare)
+				log.Printf("Activated pending key share, New Share: %v\n", validatorCosmosClient.CurrentShare.Share.Value.String())
 			}
 
-			go currentShareExpiry.Set(float64(validatorCosmosClient.CurrentShareExpiryBlock))
+			go func() {
+				defer currentShareExpiry.Set(float64(validatorCosmosClient.CurrentShareExpiryBlock))
+			}()
 
 			if validatorCosmosClient.Paused {
-				log.Printf("Client paused, skip submitting keyshare for height %s, Waiting until next round...\n", processHeightStr)
+				log.Printf("Client paused, Skip submitting keyshare for height %s, Waiting until next round\n", processHeightStr)
 				return
 			}
 
@@ -198,10 +168,10 @@ func StartFairyRingClient(cfg config.Config) {
 				if err != nil {
 					log.Printf("Submit KeyShare for Height %s ERROR: %s\n", processHeightStr, err.Error())
 					if strings.Contains(err.Error(), "transaction indexing is disabled") {
-						log.Fatal("Transaction indexing is disabled on the node, please enable it or use another node with tx indexing, exiting fairyringclient...")
+						log.Fatal("Transaction indexing is disabled on the node, please enable it or use another node with tx indexing, exiting FairyRingClient")
 					}
 					if strings.Contains(err.Error(), "account sequence mismatch") {
-						log.Fatal("Account sequence mismatch, exiting fairyringclient...")
+						log.Fatal("Account sequence mismatch, exiting FairyRingClient")
 					}
 					return
 				}
@@ -219,7 +189,7 @@ func StartFairyRingClient(cfg config.Config) {
 
 					if validatorCosmosClient.InvalidShareInARow >= PauseThreshold {
 						validatorCosmosClient.Pause()
-						log.Printf("Client paused due to number of invalid share in a row '%d' reaches threshold '%d', Waiting until next round...\n", validatorCosmosClient.InvalidShareInARow, PauseThreshold)
+						log.Printf("Client paused due to number of invalid share in a row '%d' reaches threshold '%d', Waiting until next round\n", validatorCosmosClient.InvalidShareInARow, PauseThreshold)
 					}
 
 					return
@@ -329,7 +299,7 @@ func handleEndBlockEvents(events []abciTypes.Event) {
 
 			identity := a.Value
 			if len(identity) < 1 {
-				log.Printf("Empty Identity detected in start send general key share event...")
+				log.Printf("Empty Identity detected in start send general key share event")
 				return
 			}
 
@@ -375,34 +345,20 @@ func handleNewPubKeyEvent(data map[string][]string) {
 		return
 	}
 
-	expiryHeightStr, found := data["queued-pubkey-created.active-pubkey-expiry-height"]
-	if !found {
-		return
-	}
-
-	expiryHeight, err := strconv.ParseUint(expiryHeightStr[0], 10, 64)
-	if err != nil {
-		log.Printf("Error parsing pubkey expiry height: %s\n", err.Error())
-		return
-	}
-
-	log.Printf("New Pubkey found: %s | Expiry Height: %d\n", pubKey[0], expiryHeight)
+	log.Printf("New Pubkey found: %s\n", pubKey[0])
 
 	// Get Share & Commits on chain few blocks later
-	go func() {
-		log.Println("Getting Key Share from chain in 15 seconds...")
-		time.Sleep(15 * time.Second)
+	for {
 		err := validatorCosmosClient.UpdateKeyShareFromChain(true)
 		if err != nil {
-			log.Fatalf("Error when updating key shares on new pub key event: %s", err.Error())
+			time.Sleep(3 * time.Second)
+			continue
 		}
-
 		log.Printf(
 			"Successfully Updated Shares for next round: %s | Index: %d",
 			validatorCosmosClient.PendingShare.Share.Value.String(),
 			validatorCosmosClient.PendingShare.Index,
 		)
-
-		log.Printf("New Pending Commitments: %v", validatorCosmosClient.Commitments.QueuedCommitments.Commitments)
-	}()
+		break
+	}
 }
