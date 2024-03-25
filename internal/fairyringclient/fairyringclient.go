@@ -293,7 +293,7 @@ func handleEndBlockEvents(events []abciTypes.Event) {
 		}
 		for _, a := range e.Attributes {
 
-			if a.Key != "start-send-general-keyshare-identity" {
+			if a.Key != "identity" {
 				continue
 			}
 
