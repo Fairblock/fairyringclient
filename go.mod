@@ -5,7 +5,7 @@ go 1.21
 require (
 	cosmossdk.io/math v1.1.2
 	github.com/FairBlock/DistributedIBE v0.0.0-20230528025616-f58fb2b93eaf
-	github.com/Fairblock/fairyring v0.4.0
+	github.com/Fairblock/fairyring v0.5.0
 	github.com/cometbft/cometbft v0.37.2
 	github.com/cosmos/cosmos-sdk v0.47.5
 	github.com/decred/dcrd/dcrec/secp256k1 v1.0.4
@@ -190,7 +190,5 @@ require (
 replace github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
 
 replace github.com/cosmos/cosmos-sdk => github.com/Fairblock/cosmos-sdk v0.47.3-fairyring
-
-replace github.com/Fairblock/fairyring => ../fairyring
 
 replace github.com/CosmWasm/wasmd => github.com/Fairblock/wasmd v0.45.0-fairy
