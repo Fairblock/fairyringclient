@@ -8,10 +8,10 @@ import (
 )
 
 // keysCosmosAdd represents the keys cosmos add command
-var keysCosmosAdd = &cobra.Command{
-	Use:   "add [private-key-in-hex]",
-	Short: "Adding cosmos private key",
-	Long:  `Adding cosmos private key to the config file`,
+var keysCosmosSet = &cobra.Command{
+	Use:   "set [private-key-in-hex]",
+	Short: "Setting cosmos private key",
+	Long:  `Setting cosmos private key to the config file`,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 
@@ -31,7 +31,7 @@ var keysCosmosAdd = &cobra.Command{
 			return
 		}
 
-		cfg.PrivateKeys = append(cfg.PrivateKeys, args[0])
+		cfg.PrivateKey = args[0]
 
 		if err = cfg.SaveConfig(); err != nil {
 			fmt.Printf("Error saving updated config to system: %s\n", err.Error())

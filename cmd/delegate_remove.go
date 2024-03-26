@@ -27,14 +27,13 @@ var delegateRemove = &cobra.Command{
 
 		gRPCEndpoint := cfg.GetGRPCEndpoint()
 
-		allPrivateKeys := cfg.PrivateKeys
-		if len(allPrivateKeys) == 0 {
-			log.Fatal("Private Keys Array is empty in config file, please add a valid cosmos account private key before starting")
+		if len(cfg.PrivateKey) == 0 {
+			log.Fatal("Private Key is empty in config file, please add a valid cosmos account private key before starting")
 		}
 
 		eachClient, err := cosmosClient.NewCosmosClient(
 			gRPCEndpoint,
-			allPrivateKeys[0],
+			cfg.PrivateKey,
 			cfg.FairyRingNode.ChainID,
 		)
 

@@ -25,7 +25,5 @@ Chain Denom: %s
 InvalidSharePauseThreshold: %d
 MetricsPort: %d
 `, cfg.GetGRPCEndpoint(), cfg.GetFairyRingNodeURI(), cfg.FairyRingNode.ChainID, cfg.FairyRingNode.Denom, cfg.InvalidSharePauseThreshold, cfg.MetricsPort)
-
-		fmt.Printf("Share API Url: %s\n", cfg.ShareAPIUrl)
 	},
 }

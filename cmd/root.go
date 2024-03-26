@@ -7,6 +7,8 @@ import (
 	"os"
 )
 
+var cfgFile string
+
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "fairyringclient",
@@ -25,6 +27,7 @@ func Execute() {
 
 func init() {
 	cobra.OnInitialize(initConfig)
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.fairyringclient/config.yaml)")
 }
 
 func initConfig() {
@@ -32,10 +35,15 @@ func initConfig() {
 	cobra.CheckErr(err)
 
 	// Search config in home directory with name ".fairyringclient" (without extension).
-	viper.AddConfigPath(home)
-	viper.AddConfigPath(".fairyringclient")
-	viper.SetConfigType("yaml")
-	viper.SetConfigName("config")
+	if cfgFile != "" {
+		// Use config file from the flag.
+		viper.SetConfigFile(cfgFile)
+	} else {
+		viper.AddConfigPath(home)
+		viper.AddConfigPath(".fairyringclient")
+		viper.SetConfigType("yaml")
+		viper.SetConfigName("config")
+	}
 
 	viper.AutomaticEnv() // read in environment variables that match
 

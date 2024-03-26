@@ -20,7 +20,7 @@ However, backup is still highly recommended before using this command`,
 		}
 
 		defaultCfg := config.DefaultConfig(false)
-		defaultCfg.PrivateKeys = cfg.PrivateKeys
+		defaultCfg.PrivateKey = cfg.PrivateKey
 		defaultCfg.MasterPrivateKey = cfg.MasterPrivateKey
 
 		if err = defaultCfg.SaveConfig(); err != nil {
