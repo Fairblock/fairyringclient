@@ -5,7 +5,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const ClientVersion = "v0.5.0"
+const ClientVersion = "v0.5.1"
 
 // configCmd represents the config command
 var versionCmd = &cobra.Command{

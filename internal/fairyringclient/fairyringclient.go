@@ -63,7 +63,11 @@ func StartFairyRingClient(cfg config.Config) {
 
 	validatorCosmosClient = vCosmosClient
 
-	validatorCosmosClient.RegisterValidatorSet()
+	if !validatorCosmosClient.IsAccountAuthorized() {
+		validatorCosmosClient.RegisterValidatorSet()
+	} else {
+		log.Println("Account is Authorized, skip registering in keyshare module.")
+	}
 
 	_ = validatorCosmosClient.UpdateKeyShareFromChain(false)
 	_ = validatorCosmosClient.UpdateKeyShareFromChain(true)

@@ -129,6 +129,19 @@ func NewCosmosClient(
 	}, nil
 }
 
+func (c *CosmosClient) IsAddrAuthorized(target string) bool {
+	resp, err := c.keyshareQueryClient.AuthorizedAddress(
+		context.Background(),
+		&keysharetypes.QueryGetAuthorizedAddressRequest{
+			Target: target,
+		},
+	)
+	if err != nil {
+		return false
+	}
+	return resp.AuthorizedAddress.IsAuthorized
+}
+
 func (c *CosmosClient) GetCommitments() (*keysharetypes.QueryCommitmentsResponse, error) {
 	resp, err := c.keyshareQueryClient.Commitments(
 		context.Background(),

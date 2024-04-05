@@ -28,6 +28,10 @@ type ValidatorClients struct {
 	Paused                  bool
 }
 
+func (v *ValidatorClients) IsAccountAuthorized() bool {
+	return v.CosmosClient.IsAddrAuthorized(v.CosmosClient.GetAddress())
+}
+
 func (v *ValidatorClients) RegisterValidatorSet() {
 	addr := v.CosmosClient.GetAddress()
 	_, err := validatorCosmosClient.CosmosClient.BroadcastTx(&types.MsgRegisterValidator{
