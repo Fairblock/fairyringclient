@@ -284,6 +284,9 @@ func handleTxEvents(txOut <-chan coretypes.ResultEvent) {
 				case "queued-pubkey-created.pubkey":
 					handleNewPubKeyEvent(result.Events)
 					break
+				case "pubkey-overrode.pubkey":
+					handlePubKeyOverrodeEvent(result.Events)
+					break
 				}
 			}
 		}
@@ -341,6 +344,30 @@ func handleStartSubmitGeneralKeyShareEvent(identity string) {
 		return
 	}
 	log.Printf("Submit General KeyShare for Identity %s Confirmed\n", identity)
+}
+
+func handlePubKeyOverrodeEvent(data map[string][]string) {
+	pubKey, found := data["pubkey-overrode.pubkey"]
+	if !found {
+		return
+	}
+
+	log.Printf("Old Pubkey Overrode, New Pubkey found: %s\n", pubKey[0])
+
+	for {
+		err := validatorCosmosClient.UpdateKeyShareFromChain(false)
+		if err != nil {
+			time.Sleep(3 * time.Second)
+			continue
+		}
+		log.Printf(
+			"Successfully Updated Shares for the current overrode round: %s | Index: %d",
+			validatorCosmosClient.CurrentShare.Share.Value.String(),
+			validatorCosmosClient.CurrentShare.Index,
+		)
+		validatorCosmosClient.RemovePendingShare()
+		break
+	}
 }
 
 func handleNewPubKeyEvent(data map[string][]string) {

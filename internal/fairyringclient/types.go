@@ -91,6 +91,11 @@ func (v *ValidatorClients) RemoveCurrentShare() {
 	v.CurrentShareExpiryBlock = 0
 }
 
+func (v *ValidatorClients) RemovePendingShare() {
+	v.PendingShare = nil
+	v.PendingShareExpiryBlock = 0
+}
+
 func (v *ValidatorClients) UpdateKeyShareFromChain(forNextRound bool) error {
 	share, shareIndex, expiry, err := v.CosmosClient.GetKeyShare(forNextRound)
 	if err != nil {
