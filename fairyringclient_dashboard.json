@@ -18,14 +18,14 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 7,
+  "id": 6,
   "links": [],
   "liveNow": false,
   "panels": [
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "e42b6d33-3e52-4eba-a0d8-7ee728e8b77e"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -64,15 +64,16 @@
           "fields": "",
           "values": false
         },
+        "showPercentChange": false,
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "10.2.2",
+      "pluginVersion": "10.4.2",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "e42b6d33-3e52-4eba-a0d8-7ee728e8b77e"
+            "uid": "${datasource}"
           },
           "disableTextWrap": false,
           "editorMode": "builder",
@@ -92,7 +93,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "e42b6d33-3e52-4eba-a0d8-7ee728e8b77e"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -131,15 +132,16 @@
           "fields": "",
           "values": false
         },
+        "showPercentChange": false,
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "10.2.2",
+      "pluginVersion": "10.4.2",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "e42b6d33-3e52-4eba-a0d8-7ee728e8b77e"
+            "uid": "${datasource}"
           },
           "disableTextWrap": false,
           "editorMode": "builder",
@@ -159,7 +161,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "e42b6d33-3e52-4eba-a0d8-7ee728e8b77e"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -199,15 +201,16 @@
           "fields": "",
           "values": false
         },
+        "showPercentChange": false,
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "10.2.2",
+      "pluginVersion": "10.4.2",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "e42b6d33-3e52-4eba-a0d8-7ee728e8b77e"
+            "uid": "${datasource}"
           },
           "disableTextWrap": false,
           "editorMode": "code",
@@ -227,7 +230,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "e42b6d33-3e52-4eba-a0d8-7ee728e8b77e"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -270,15 +273,16 @@
           "fields": "",
           "values": false
         },
+        "showPercentChange": false,
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "10.2.2",
+      "pluginVersion": "10.4.2",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "e42b6d33-3e52-4eba-a0d8-7ee728e8b77e"
+            "uid": "${datasource}"
           },
           "disableTextWrap": false,
           "editorMode": "builder",
@@ -298,7 +302,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "e42b6d33-3e52-4eba-a0d8-7ee728e8b77e"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -341,15 +345,16 @@
           "fields": "",
           "values": false
         },
+        "showPercentChange": false,
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "10.2.2",
+      "pluginVersion": "10.4.2",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "e42b6d33-3e52-4eba-a0d8-7ee728e8b77e"
+            "uid": "${datasource}"
           },
           "disableTextWrap": false,
           "editorMode": "builder",
@@ -368,10 +373,29 @@
     }
   ],
   "refresh": "5s",
-  "schemaVersion": 38,
+  "schemaVersion": 39,
   "tags": [],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "prometheus",
+          "value": "fdj6tf8y427swd"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Datasource",
+        "multi": false,
+        "name": "datasource",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "type": "datasource"
+      }
+    ]
   },
   "time": {
     "from": "now-6h",
@@ -381,6 +405,6 @@
   "timezone": "",
   "title": "FairyringClient Dashboard",
   "uid": "a3d7139d-a9e3-44ba-9cd4-4c74af15a283",
-  "version": 6,
+  "version": 2,
   "weekStart": ""
 }
