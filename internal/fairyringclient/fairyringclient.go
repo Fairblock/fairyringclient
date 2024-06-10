@@ -50,6 +50,10 @@ var (
 		Name: "fairyringclient_latest_processed_height",
 		Help: "The latest height that submitted keyshare",
 	})
+	latestSubmitKeyshare = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "fairyringclient_latest_submit_keyshare_height",
+		Help: "Get latest submit keyshare block height",
+	})
 )
 
 func StartFairyRingClient(cfg config.Config) {
@@ -205,6 +209,7 @@ func StartFairyRingClient(cfg config.Config) {
 					return
 				}
 				log.Printf("Submit KeyShare for Height %s Confirmed\n", processHeightStr)
+				latestSubmitKeyshare.Set(float64(processHeight))
 				defer validShareSubmitted.Inc()
 
 			}()
