@@ -5,16 +5,17 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	distIBE "github.com/FairBlock/DistributedIBE"
+	keysharetypes "github.com/Fairblock/fairyring/x/keyshare/types"
+	peptypes "github.com/Fairblock/fairyring/x/pep/types"
 	dcrdSecp256k1 "github.com/decred/dcrd/dcrec/secp256k1"
 	bls "github.com/drand/kyber-bls12381"
+	"github.com/skip-mev/block-sdk/v2/testutils"
 	"log"
 	"strings"
 	"time"
 
 	"cosmossdk.io/math"
-	"github.com/Fairblock/fairyring/app"
-	keysharetypes "github.com/Fairblock/fairyring/x/keyshare/types"
-	"github.com/Fairblock/fairyring/x/pep/types"
+
 	clienttx "github.com/cosmos/cosmos-sdk/client/tx"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
@@ -38,7 +39,7 @@ type CosmosClient struct {
 	txClient            tx.ServiceClient
 	grpcConn            *grpc.ClientConn
 	bankQueryClient     banktypes.QueryClient
-	pepQueryClient      types.QueryClient
+	pepQueryClient      peptypes.QueryClient
 	keyshareQueryClient keysharetypes.QueryClient
 	privateKey          secp256k1.PrivKey
 	dcrdPrivKey         dcrdSecp256k1.PrivateKey
@@ -74,7 +75,7 @@ func NewCosmosClient(
 
 	authClient := authtypes.NewQueryClient(grpcConn)
 	bankClient := banktypes.NewQueryClient(grpcConn)
-	pepeClient := types.NewQueryClient(grpcConn)
+	pepeClient := peptypes.NewQueryClient(grpcConn)
 	keyshareClient := keysharetypes.NewQueryClient(grpcConn)
 
 	keyBytes, err := hex.DecodeString(privateKeyHex)
@@ -207,7 +208,7 @@ func (c *CosmosClient) GetKeyShare(getPendingShare bool) (*distIBE.Share, uint64
 func (c *CosmosClient) GetLatestHeight() (uint64, error) {
 	resp, err := c.pepQueryClient.LatestHeight(
 		context.Background(),
-		&types.QueryLatestHeightRequest{},
+		&peptypes.QueryLatestHeightRequest{},
 	)
 	if err != nil {
 		return 0, err
@@ -314,9 +315,9 @@ func (c *CosmosClient) WaitForTx(hash string, rate time.Duration) (*tx.GetTxResp
 }
 
 func (c *CosmosClient) signTxMsg(msg cosmostypes.Msg, adjustGas bool) ([]byte, error) {
-	encodingCfg := app.MakeEncodingConfig()
+	encodingCfg := testutils.CreateTestEncodingConfig()
 	txBuilder := encodingCfg.TxConfig.NewTxBuilder()
-	signMode := encodingCfg.TxConfig.SignModeHandler().DefaultMode()
+	encodingCfg.TxConfig.SignModeHandler().DefaultMode()
 
 	err := txBuilder.SetMsgs(msg)
 	if err != nil {
@@ -327,7 +328,7 @@ func (c *CosmosClient) signTxMsg(msg cosmostypes.Msg, adjustGas bool) ([]byte, e
 	if adjustGas {
 		txf := clienttx.Factory{}.
 			WithGas(defaultGasLimit).
-			WithSignMode(signMode).
+			WithSignMode(1).
 			WithTxConfig(encodingCfg.TxConfig).
 			WithChainID(c.chainID).
 			WithAccountNumber(c.account.AccountNumber).
@@ -351,7 +352,7 @@ func (c *CosmosClient) signTxMsg(msg cosmostypes.Msg, adjustGas bool) ([]byte, e
 	}
 
 	sigData := signing.SingleSignatureData{
-		SignMode:  signMode,
+		SignMode:  1,
 		Signature: nil,
 	}
 	sig := signing.SignatureV2{
@@ -365,7 +366,7 @@ func (c *CosmosClient) signTxMsg(msg cosmostypes.Msg, adjustGas bool) ([]byte, e
 	}
 
 	sigV2, err := clienttx.SignWithPrivKey(
-		signMode, signerData, txBuilder, &c.privateKey,
+		context.Background(), 1, signerData, txBuilder, &c.privateKey,
 		encodingCfg.TxConfig, c.account.Sequence,
 	)
 

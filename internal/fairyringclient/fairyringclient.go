@@ -76,7 +76,7 @@ func StartFairyRingClient(cfg config.Config) {
 	_ = validatorCosmosClient.UpdateKeyShareFromChain(false)
 	_ = validatorCosmosClient.UpdateKeyShareFromChain(true)
 
-	out, err := client.Subscribe(context.Background(), "", "tm.event = 'NewBlockHeader'")
+	out, err := client.Subscribe(context.Background(), "", "tm.event = 'NewBlockEvents'")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -97,12 +97,12 @@ func StartFairyRingClient(cfg config.Config) {
 	for {
 		select {
 		case result := <-out:
-			newBlockHeader := result.Data.(tmtypes.EventDataNewBlockHeader)
+			newBlockEvents := result.Data.(tmtypes.EventDataNewBlockEvents)
 
-			height := newBlockHeader.Header.Height
+			height := newBlockEvents.Height
 			fmt.Println("")
 
-			go handleEndBlockEvents(newBlockHeader.ResultEndBlock.GetEvents())
+			go handleEndBlockEvents(newBlockEvents.Events)
 
 			processHeight := uint64(height + 1)
 			processHeightStr := strconv.FormatUint(processHeight, 10)
