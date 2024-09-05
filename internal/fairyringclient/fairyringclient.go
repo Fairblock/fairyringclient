@@ -2,12 +2,18 @@ package fairyringclient
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/pem"
 	"fairyringclient/config"
 	"fairyringclient/pkg/cosmosClient"
 	"fmt"
-	"github.com/pkg/errors"
 	"net/http"
 	"strings"
+
+	"github.com/pkg/errors"
 
 	"github.com/Fairblock/fairyring/x/keyshare/types"
 	"github.com/prometheus/client_golang/prometheus"
@@ -300,6 +306,29 @@ func handleTxEvents(txOut <-chan coretypes.ResultEvent) {
 
 func handleEndBlockEvents(events []abciTypes.Event) {
 	for _, e := range events {
+		if e.Type == "start-send-encrypted-keyshare" {
+			var id, rsaPubkey, requester string
+			for _, a := range e.Attributes {
+				if a.Key == "identity" {
+					id = a.Value
+				}
+				if a.Key == "requester" {
+					requester = a.Value
+				}
+				if a.Key == "rsa-64-pubkey" {
+					rsaPubkey = a.Value
+				}
+			}
+
+			if len(id) < 1 {
+				log.Printf("Empty Identity detected in start send private key share event")
+				continue
+			}
+
+			handleStartSubmitEncryptedKeyShareEvent(id, rsaPubkey, requester)
+			continue
+		}
+
 		if e.Type != "start-send-general-keyshare" {
 			continue
 		}
@@ -319,6 +348,90 @@ func handleEndBlockEvents(events []abciTypes.Event) {
 			return
 		}
 	}
+}
+
+func handleStartSubmitEncryptedKeyShareEvent(
+	identity string,
+	rsaPubkey string,
+	requester string,
+) {
+	log.Printf("Start Submitting encrypted Key Share for identity: %s pubkey: %s requester: %s", identity, rsaPubkey, requester)
+	derivedShare, index, err := validatorCosmosClient.DeriveKeyShare([]byte(identity))
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("Derived General Key Share: %s\n", derivedShare)
+
+	// Decode the PEM-encoded public key
+	block, _ := pem.Decode([]byte(rsaPubkey))
+	if block == nil || block.Type != "PUBLIC KEY" {
+		log.Printf("Failed to decode PEM block containing public key")
+		return
+	}
+
+	// Parse the public key
+	pubKey, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		log.Printf("Failed to parse DER encoded public key: %s\n", err)
+		return
+	}
+
+	// Type assert to get an *rsa.PublicKey
+	rsaPK, ok := pubKey.(*rsa.PublicKey)
+	if !ok {
+		log.Println("Not an RSA public key")
+		return
+	}
+
+	// Message to encrypt
+	message := []byte(derivedShare)
+
+	// Encrypt the message
+	encryptedMessage, err := encryptWithPublicKey(rsaPK, message)
+	if err != nil {
+		fmt.Printf("Error encrypting message: %s\n", err)
+		return
+	}
+
+	resp, err := validatorCosmosClient.CosmosClient.BroadcastTx(&types.MsgSubmitEncryptedKeyshare{
+		Creator:           validatorCosmosClient.CosmosClient.GetAddress(),
+		Identity:          identity,
+		KeyShareIndex:     index,
+		Requester:         requester,
+		EncryptedKeyshare: string(encryptedMessage),
+	}, true)
+
+	if err != nil {
+		log.Printf("Submit Private KeyShare for Identity %s Requester %s ERROR: %s\n", identity, requester, err.Error())
+	}
+	txResp, err := validatorCosmosClient.CosmosClient.WaitForTx(resp.TxHash, time.Second)
+	if err != nil {
+		log.Printf("Private KeyShare for Identity %s Requester %s Failed: %s\n", identity, requester, err.Error())
+		return
+	}
+	if txResp.TxResponse.Code != 0 {
+		log.Printf("Private KeyShare for Identity %s Requester %s Failed: %s\n", identity, requester, txResp.TxResponse.RawLog)
+		return
+	}
+	log.Printf("Private General KeyShare for Identity %s Requester %s Confirmed\n", identity, requester)
+}
+
+// This function encrypts data using an RSA public key.
+func encryptWithPublicKey(pub *rsa.PublicKey, msg []byte) ([]byte, error) {
+
+	hash := sha256.New()
+	// Encrypt the message with the public key using OAEP padding
+	encryptedMsg, err := rsa.EncryptOAEP(
+		hash,        // Random source
+		rand.Reader, // RSA-OAEP uses random bytes for padding
+		pub,         // Public key for encryption
+		msg,         // Data to encrypt
+		nil,         // Optional label, can be nil
+	)
+	if err != nil {
+		return nil, err
+	}
+	return encryptedMsg, nil
 }
 
 func handleStartSubmitGeneralKeyShareEvent(identity string) {
