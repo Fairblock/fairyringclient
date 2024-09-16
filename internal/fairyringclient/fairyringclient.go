@@ -2,17 +2,17 @@ package fairyringclient
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/rsa"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/sha256"
-	"crypto/x509"
-	"encoding/pem"
+	"encoding/base64"
 	"fairyringclient/config"
 	"fairyringclient/pkg/cosmosClient"
 	"fmt"
 	"net/http"
 	"strings"
 
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/pkg/errors"
 
 	"github.com/Fairblock/fairyring/x/keyshare/types"
@@ -307,7 +307,7 @@ func handleTxEvents(txOut <-chan coretypes.ResultEvent) {
 func handleEndBlockEvents(events []abciTypes.Event) {
 	for _, e := range events {
 		if e.Type == "start-send-encrypted-keyshare" {
-			var id, rsaPubkey, requester string
+			var id, secpPubkey, requester string
 			for _, a := range e.Attributes {
 				if a.Key == "identity" {
 					id = a.Value
@@ -315,8 +315,8 @@ func handleEndBlockEvents(events []abciTypes.Event) {
 				if a.Key == "requester" {
 					requester = a.Value
 				}
-				if a.Key == "rsa-64-pubkey" {
-					rsaPubkey = a.Value
+				if a.Key == "secp256k1-pubkey" {
+					secpPubkey = a.Value
 				}
 			}
 
@@ -325,7 +325,7 @@ func handleEndBlockEvents(events []abciTypes.Event) {
 				continue
 			}
 
-			handleStartSubmitEncryptedKeyShareEvent(id, rsaPubkey, requester)
+			handleStartSubmitEncryptedKeyShareEvent(id, secpPubkey, requester)
 			continue
 		}
 
@@ -352,42 +352,18 @@ func handleEndBlockEvents(events []abciTypes.Event) {
 
 func handleStartSubmitEncryptedKeyShareEvent(
 	identity string,
-	rsaPubkey string,
+	secpPubkey string,
 	requester string,
 ) {
-	log.Printf("Start Submitting encrypted Key Share for identity: %s pubkey: %s requester: %s", identity, rsaPubkey, requester)
+	log.Printf("Start Submitting encrypted Key Share for identity: %s pubkey: %s requester: %s", identity, secpPubkey, requester)
 	derivedShare, index, err := validatorCosmosClient.DeriveKeyShare([]byte(identity))
 	if err != nil {
 		log.Fatal(err)
 	}
 	log.Printf("Derived General Key Share: %s\n", derivedShare)
 
-	// Decode the PEM-encoded public key
-	block, _ := pem.Decode([]byte(rsaPubkey))
-	if block == nil || block.Type != "PUBLIC KEY" {
-		log.Printf("Failed to decode PEM block containing public key")
-		return
-	}
-
-	// Parse the public key
-	pubKey, err := x509.ParsePKIXPublicKey(block.Bytes)
-	if err != nil {
-		log.Printf("Failed to parse DER encoded public key: %s\n", err)
-		return
-	}
-
-	// Type assert to get an *rsa.PublicKey
-	rsaPK, ok := pubKey.(*rsa.PublicKey)
-	if !ok {
-		log.Println("Not an RSA public key")
-		return
-	}
-
-	// Message to encrypt
-	message := []byte(derivedShare)
-
 	// Encrypt the message
-	encryptedMessage, err := encryptWithPublicKey(rsaPK, message)
+	encryptedMessage, err := encryptWithPublicKey(derivedShare, secpPubkey)
 	if err != nil {
 		fmt.Printf("Error encrypting message: %s\n", err)
 		return
@@ -398,7 +374,7 @@ func handleStartSubmitEncryptedKeyShareEvent(
 		Identity:          identity,
 		KeyShareIndex:     index,
 		Requester:         requester,
-		EncryptedKeyshare: string(encryptedMessage),
+		EncryptedKeyshare: encryptedMessage,
 	}, true)
 
 	if err != nil {
@@ -417,21 +393,40 @@ func handleStartSubmitEncryptedKeyShareEvent(
 }
 
 // This function encrypts data using an RSA public key.
-func encryptWithPublicKey(pub *rsa.PublicKey, msg []byte) ([]byte, error) {
-
-	hash := sha256.New()
-	// Encrypt the message with the public key using OAEP padding
-	encryptedMsg, err := rsa.EncryptOAEP(
-		hash,        // Random source
-		rand.Reader, // RSA-OAEP uses random bytes for padding
-		pub,         // Public key for encryption
-		msg,         // Data to encrypt
-		nil,         // Optional label, can be nil
-	)
+func encryptWithPublicKey(data string, pubKeyBase64 string) (string, error) {
+	// Decode the base64 public key
+	pubKeyBytes, err := base64.StdEncoding.DecodeString(pubKeyBase64)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	return encryptedMsg, nil
+
+	// Load the secp256k1 public key
+	pubKey, err := btcec.ParsePubKey(pubKeyBytes)
+	if err != nil {
+		return "", err
+	}
+
+	// Perform ECDH to get a shared secret
+	sharedSecret := sha256.Sum256(pubKey.SerializeCompressed())
+
+	// Create AES cipher block
+	block, err := aes.NewCipher(sharedSecret[:])
+	if err != nil {
+		return "", err
+	}
+
+	// Create a GCM (Galois/Counter Mode) instance
+	aesGCM, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+
+	// Encrypt the data
+	nonce := make([]byte, aesGCM.NonceSize())
+	ciphertext := aesGCM.Seal(nil, nonce, []byte(data), nil)
+
+	// Encode ciphertext as base64 for easy handling
+	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
 func handleStartSubmitGeneralKeyShareEvent(identity string) {
