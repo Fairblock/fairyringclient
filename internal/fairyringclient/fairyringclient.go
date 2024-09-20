@@ -2,17 +2,15 @@ package fairyringclient
 
 import (
 	"context"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"fairyringclient/config"
 	"fairyringclient/pkg/cosmosClient"
 	"fmt"
 	"net/http"
 	"strings"
 
-	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/pkg/errors"
 
 	"github.com/Fairblock/fairyring/x/keyshare/types"
@@ -401,32 +399,18 @@ func encryptWithPublicKey(data string, pubKeyBase64 string) (string, error) {
 	}
 
 	// Load the secp256k1 public key
-	pubKey, err := btcec.ParsePubKey(pubKeyBytes)
+	pubKey, err := btcec.ParsePubKey(pubKeyBytes, btcec.S256())
 	if err != nil {
 		return "", err
 	}
 
-	// Perform ECDH to get a shared secret
-	sharedSecret := sha256.Sum256(pubKey.SerializeCompressed())
-
-	// Create AES cipher block
-	block, err := aes.NewCipher(sharedSecret[:])
+	ciphertext, err := btcec.Encrypt(pubKey, []byte(data))
 	if err != nil {
 		return "", err
 	}
 
-	// Create a GCM (Galois/Counter Mode) instance
-	aesGCM, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", err
-	}
-
-	// Encrypt the data
-	nonce := make([]byte, aesGCM.NonceSize())
-	ciphertext := aesGCM.Seal(nil, nonce, []byte(data), nil)
-
-	// Encode ciphertext as base64 for easy handling
-	return base64.StdEncoding.EncodeToString(ciphertext), nil
+	// Encode ciphertext as hex for easy handling
+	return hex.EncodeToString(ciphertext), nil
 }
 
 func handleStartSubmitGeneralKeyShareEvent(identity string) {

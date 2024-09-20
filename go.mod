@@ -6,6 +6,7 @@ require (
 	cosmossdk.io/math v1.3.0
 	github.com/FairBlock/DistributedIBE v0.0.0-20231211202607-d457df6869db
 	github.com/Fairblock/fairyring v0.8.2
+	github.com/btcsuite/btcd v0.22.3
 	github.com/cometbft/cometbft v0.38.9
 	github.com/cosmos/cosmos-sdk v0.50.6
 	github.com/decred/dcrd/dcrec/secp256k1 v1.0.4
