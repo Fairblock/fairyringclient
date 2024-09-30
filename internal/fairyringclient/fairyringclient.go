@@ -2,9 +2,13 @@ package fairyringclient
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"fairyringclient/config"
 	"fairyringclient/pkg/cosmosClient"
 	"fmt"
+	"github.com/btcsuite/btcd/btcec"
+	"github.com/cosmos/cosmos-sdk/types/tx"
 	"github.com/pkg/errors"
 	"net/http"
 	"strings"
@@ -94,6 +98,12 @@ func StartFairyRingClient(cfg config.Config) {
 	log.Printf("Metrics is listening on port: %d\n", cfg.MetricsPort)
 	go http.ListenAndServe(fmt.Sprintf(":%d", cfg.MetricsPort), nil)
 
+	go func() {
+		if err := validatorCosmosClient.CosmosClient.HandleTxQueue(); err != nil {
+			log.Printf("Error in queued tx handler: %v", err)
+		}
+	}()
+
 	for {
 		select {
 		case result := <-out:
@@ -165,15 +175,13 @@ func StartFairyRingClient(cfg config.Config) {
 				log.Fatal(err)
 			}
 
-			go func() {
-				resp, err := validatorCosmosClient.CosmosClient.BroadcastTx(&types.MsgSendKeyshare{
-					Creator:       validatorCosmosClient.CosmosClient.GetAddress(),
-					Message:       extractedKeyHex,
-					KeyShareIndex: keyShareIndex,
-					BlockHeight:   processHeight,
-				}, true)
-
-				if err != nil {
+			validatorCosmosClient.CosmosClient.AddTxToQueue(&types.MsgSendKeyshare{
+				Creator:       validatorCosmosClient.CosmosClient.GetAddress(),
+				Message:       extractedKeyHex,
+				KeyShareIndex: keyShareIndex,
+				BlockHeight:   processHeight,
+			}, true,
+				func(err error) {
 					log.Printf("Submit KeyShare for Height %s ERROR: %s\n", processHeightStr, err.Error())
 					if strings.Contains(err.Error(), "transaction indexing is disabled") {
 						log.Fatal("Transaction indexing is disabled on the node, please enable it or use another node with tx indexing, exiting FairyRingClient")
@@ -181,38 +189,31 @@ func StartFairyRingClient(cfg config.Config) {
 					if strings.Contains(err.Error(), "account sequence mismatch") {
 						log.Fatal("Account sequence mismatch, exiting FairyRingClient")
 					}
-					return
-				}
-				txResp, err := validatorCosmosClient.CosmosClient.WaitForTx(resp.TxHash, time.Second)
-				if err != nil {
-					log.Printf("KeyShare for Height %s Failed: %s\n", processHeightStr, err.Error())
-					return
-				}
+				},
+				func(txResp *tx.GetTxResponse) {
+					if hasCoinSpentEvent(txResp.TxResponse.Events) {
+						validatorCosmosClient.IncreaseInvalidShareNum()
+						log.Printf("KeyShare for Height %s is INVALID, Got Slashed, Current number invalid share in a row: %d\n", processHeightStr, validatorCosmosClient.InvalidShareInARow)
 
-				if hasCoinSpentEvent(txResp.TxResponse.Events) {
-					validatorCosmosClient.IncreaseInvalidShareNum()
-					log.Printf("KeyShare for Height %s is INVALID, Got Slashed, Current number invalid share in a row: %d\n", processHeightStr, validatorCosmosClient.InvalidShareInARow)
+						defer invalidShareSubmitted.Inc()
 
-					defer invalidShareSubmitted.Inc()
+						if validatorCosmosClient.InvalidShareInARow >= PauseThreshold {
+							validatorCosmosClient.Pause()
+							log.Printf("Client paused due to number of invalid share in a row '%d' reaches threshold '%d', Waiting until next round\n", validatorCosmosClient.InvalidShareInARow, PauseThreshold)
+						}
 
-					if validatorCosmosClient.InvalidShareInARow >= PauseThreshold {
-						validatorCosmosClient.Pause()
-						log.Printf("Client paused due to number of invalid share in a row '%d' reaches threshold '%d', Waiting until next round\n", validatorCosmosClient.InvalidShareInARow, PauseThreshold)
+						return
 					}
 
-					return
-				}
-
-				if txResp.TxResponse.Code != 0 {
-					log.Printf("KeyShare for Height %s Failed: %s\n", processHeightStr, txResp.TxResponse.RawLog)
-					defer failedShareSubmitted.Inc()
-					return
-				}
-				log.Printf("Submit KeyShare for Height %s Confirmed\n", processHeightStr)
-				latestSubmitKeyshare.Set(float64(processHeight))
-				defer validShareSubmitted.Inc()
-
-			}()
+					if txResp.TxResponse.Code != 0 {
+						log.Printf("KeyShare for Height %s Failed: %s\n", processHeightStr, txResp.TxResponse.RawLog)
+						defer failedShareSubmitted.Inc()
+						return
+					}
+					log.Printf("Submit KeyShare for Height %s Confirmed\n", processHeightStr)
+					latestSubmitKeyshare.Set(float64(processHeight))
+					defer validShareSubmitted.Inc()
+				})
 
 			latestProcessedHeight.Set(float64(processHeight))
 		}
@@ -300,6 +301,29 @@ func handleTxEvents(txOut <-chan coretypes.ResultEvent) {
 
 func handleEndBlockEvents(events []abciTypes.Event) {
 	for _, e := range events {
+		if e.Type == "start-send-encrypted-keyshare" {
+			var id, secpPubkey, requester string
+			for _, a := range e.Attributes {
+				if a.Key == "identity" {
+					id = a.Value
+				}
+				if a.Key == "requester" {
+					requester = a.Value
+				}
+				if a.Key == "secp256k1-pubkey" {
+					secpPubkey = a.Value
+				}
+			}
+
+			if len(id) < 1 {
+				log.Printf("Empty Identity detected in start send private key share event")
+				continue
+			}
+
+			handleStartSubmitEncryptedKeyShareEvent(id, secpPubkey, requester)
+			continue
+		}
+
 		if e.Type != "start-send-general-keyshare" {
 			continue
 		}
@@ -321,6 +345,68 @@ func handleEndBlockEvents(events []abciTypes.Event) {
 	}
 }
 
+func handleStartSubmitEncryptedKeyShareEvent(
+	identity string,
+	secpPubkey string,
+	requester string,
+) {
+	log.Printf("Start Submitting Encrypted Key Share for identity: %s pubkey: %s requester: %s", identity, secpPubkey, requester)
+	derivedShare, index, err := validatorCosmosClient.DeriveKeyShare([]byte(identity))
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("Derived Private Key Share: %s\n", derivedShare)
+
+	// Encrypt the message
+	encryptedMessage, err := encryptWithPublicKey(derivedShare, secpPubkey)
+	if err != nil {
+		fmt.Printf("Error encrypting message: %s\n", err)
+		return
+	}
+
+	validatorCosmosClient.CosmosClient.AddTxToQueue(&types.MsgSubmitEncryptedKeyshare{
+		Creator:           validatorCosmosClient.CosmosClient.GetAddress(),
+		Identity:          identity,
+		KeyShareIndex:     index,
+		Requester:         requester,
+		EncryptedKeyshare: encryptedMessage,
+	}, true,
+		func(err error) {
+			log.Printf("Submit Private KeyShare for Identity %s Requester %s Failed: %s\n", identity, requester, err.Error())
+		},
+		func(txResp *tx.GetTxResponse) {
+			if txResp.TxResponse.Code != 0 {
+				log.Printf("Private KeyShare for Identity %s Requester %s Failed: %s\n", identity, requester, txResp.TxResponse.RawLog)
+				return
+			} else {
+				log.Printf("Private KeyShare for Identity %s Requester %s Confirmed\n", identity, requester)
+			}
+		})
+}
+
+// This function encrypts data using an RSA public key.
+func encryptWithPublicKey(data string, pubKeyBase64 string) (string, error) {
+	// Decode the base64 public key
+	pubKeyBytes, err := base64.StdEncoding.DecodeString(pubKeyBase64)
+	if err != nil {
+		return "", err
+	}
+
+	// Load the secp256k1 public key
+	pubKey, err := btcec.ParsePubKey(pubKeyBytes, btcec.S256())
+	if err != nil {
+		return "", err
+	}
+
+	ciphertext, err := btcec.Encrypt(pubKey, []byte(data))
+	if err != nil {
+		return "", err
+	}
+
+	// Encode ciphertext as hex for easy handling
+	return hex.EncodeToString(ciphertext), nil
+}
+
 func handleStartSubmitGeneralKeyShareEvent(identity string) {
 	log.Printf("Start Submitting General Key Share for identity: %s", identity)
 	derivedShare, index, err := validatorCosmosClient.DeriveKeyShare([]byte(identity))
@@ -329,26 +415,24 @@ func handleStartSubmitGeneralKeyShareEvent(identity string) {
 	}
 	log.Printf("Derived General Key Share: %s\n", derivedShare)
 
-	resp, err := validatorCosmosClient.CosmosClient.BroadcastTx(&types.MsgCreateGeneralKeyShare{
+	validatorCosmosClient.CosmosClient.AddTxToQueue(&types.MsgCreateGeneralKeyShare{
 		Creator:       validatorCosmosClient.CosmosClient.GetAddress(),
 		KeyShare:      derivedShare,
 		KeyShareIndex: index,
 		IdType:        "private-gov-identity",
 		IdValue:       identity,
-	}, true)
-	if err != nil {
-		log.Printf("Submit General KeyShare for Identity %s ERROR: %s\n", identity, err.Error())
-	}
-	txResp, err := validatorCosmosClient.CosmosClient.WaitForTx(resp.TxHash, time.Second)
-	if err != nil {
-		log.Printf("General KeyShare for Identity %s Failed: %s\n", identity, err.Error())
-		return
-	}
-	if txResp.TxResponse.Code != 0 {
-		log.Printf("General KeyShare for Identity %s Failed: %s\n", identity, txResp.TxResponse.RawLog)
-		return
-	}
-	log.Printf("Submit General KeyShare for Identity %s Confirmed\n", identity)
+	}, true,
+		func(err error) {
+			log.Printf("Submit General KeyShare for Identity %s ERROR: %s\n", identity, err.Error())
+		},
+		func(txResp *tx.GetTxResponse) {
+			if txResp.TxResponse.Code != 0 {
+				log.Printf("General KeyShare for Identity %s Failed: %s\n", identity, txResp.TxResponse.RawLog)
+				return
+			} else {
+				log.Printf("Submit General KeyShare for Identity %s Confirmed\n", identity)
+			}
+		})
 }
 
 func handlePubKeyOverrodeEvent(data map[string][]string) {
