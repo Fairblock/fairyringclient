@@ -167,7 +167,7 @@ require (
 
 replace github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
 
-replace github.com/Fairblock/fairyring => ../fairyring
+replace github.com/Fairblock/fairyring => ../fairyringPR
 
 replace github.com/cosmos/cosmos-sdk => github.com/Fairblock/cosmos-sdk v0.50.8-fairyring
 

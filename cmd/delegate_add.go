@@ -4,11 +4,9 @@ import (
 	"fairyringclient/config"
 	"fairyringclient/pkg/cosmosClient"
 	"fmt"
-	"log"
-	"time"
-
 	"github.com/Fairblock/fairyring/x/keyshare/types"
 	"github.com/spf13/cobra"
+	"log"
 )
 
 // delegateAdd represents the delegate add command
@@ -50,15 +48,10 @@ var delegateAdd = &cobra.Command{
 			log.Fatalf("Invalid MsgCreateAuthorizedAddress: %s", err.Error())
 		}
 
-		resp, err := eachClient.BroadcastTx(&msg, false)
+		txResp, err := eachClient.BroadcastTx(&msg, false)
 
 		if err != nil {
 			log.Fatalf("unable to broadcast create authorized address message, ERROR: %s\n", err.Error())
-		}
-
-		txResp, err := eachClient.WaitForTx(resp.TxHash, time.Second)
-		if err != nil {
-			log.Fatalf("error on creating authorized address: %s\n", err.Error())
 		}
 
 		if txResp.TxResponse.Code != 0 {

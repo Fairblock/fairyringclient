@@ -34,6 +34,13 @@ const (
 	defaultGasLimit      = 300000
 )
 
+type QueuedTx struct {
+	Tx                 *cosmostypes.Msg
+	TxResultErrHandler func(error)
+	TxSuccessHandler   func(*tx.GetTxResponse)
+	AdjustGas          bool
+}
+
 type CosmosClient struct {
 	authClient          authtypes.QueryClient
 	txClient            tx.ServiceClient
@@ -47,17 +54,7 @@ type CosmosClient struct {
 	account             authtypes.BaseAccount
 	accAddress          cosmostypes.AccAddress
 	chainID             string
-}
-
-func PrivateKeyToAccAddress(privateKeyHex string) (cosmostypes.AccAddress, error) {
-	keyBytes, err := hex.DecodeString(privateKeyHex)
-	if err != nil {
-		return nil, err
-	}
-
-	privateKey := secp256k1.PrivKey{Key: keyBytes}
-
-	return cosmostypes.AccAddress(privateKey.PubKey().Address()), nil
+	txQueue             chan QueuedTx
 }
 
 func NewCosmosClient(
@@ -127,7 +124,24 @@ func NewCosmosClient(
 		accAddress:          accAddr,
 		publicKey:           pubKey,
 		chainID:             chainID,
+		txQueue:             make(chan QueuedTx, 3),
 	}, nil
+}
+
+func (c *CosmosClient) updateAccSequence() error {
+	out, err := c.authClient.Account(context.Background(),
+		&authtypes.QueryAccountRequest{Address: c.accAddress.String()})
+	if err != nil {
+		return err
+	}
+	var baseAccount authtypes.BaseAccount
+
+	if err = baseAccount.Unmarshal(out.Account.Value); err != nil {
+		return err
+	}
+
+	c.account = baseAccount
+	return nil
 }
 
 func (c *CosmosClient) IsAddrAuthorized(target string) bool {
@@ -252,13 +266,81 @@ func (c *CosmosClient) handleBroadcastResult(resp *cosmostypes.TxResponse, err e
 	return nil
 }
 
-func (c *CosmosClient) BroadcastTx(msg cosmostypes.Msg, adjustGas bool) (*cosmostypes.TxResponse, error) {
+func (c *CosmosClient) AddTxToQueue(
+	msg cosmostypes.Msg,
+	adjustGas bool,
+	errHandler func(error),
+	successHandler func(*tx.GetTxResponse),
+) {
+	c.txQueue <- QueuedTx{
+		Tx:                 &msg,
+		AdjustGas:          adjustGas,
+		TxResultErrHandler: errHandler,
+		TxSuccessHandler:   successHandler,
+	}
+}
+
+func (c *CosmosClient) HandleTxQueue() error {
+	for {
+		queuedTx := <-c.txQueue
+		if queuedTx.Tx == nil {
+			continue
+		}
+
+		go func() {
+			if err := c.updateAccSequence(); err != nil {
+				log.Printf("Error updating Account sequence in Tx queue handler: %v", err)
+				return
+			}
+
+			txBytes, err := c.signTxMsg(*queuedTx.Tx, queuedTx.AdjustGas)
+			if err != nil {
+				log.Printf("Error signing tx in Tx queue handler: %v", err)
+				return
+			}
+
+			resp, err := c.txClient.BroadcastTx(
+				context.Background(),
+				&tx.BroadcastTxRequest{
+					TxBytes: txBytes,
+					Mode:    tx.BroadcastMode_BROADCAST_MODE_SYNC,
+				},
+			)
+			if err != nil {
+				log.Printf("Error broadcasting tx in Tx queue handler: %v", err)
+				if queuedTx.TxResultErrHandler != nil {
+					queuedTx.TxResultErrHandler(err)
+				}
+				return
+			}
+
+			c.WaitForQueuedTx(queuedTx, resp.TxResponse.TxHash)
+		}()
+
+	}
+}
+
+func (c *CosmosClient) WaitForQueuedTx(q QueuedTx, txHash string) {
+	getTxResp, err := c.WaitForTx(txHash, time.Second)
+	if err != nil {
+		log.Printf("Error waiting for tx in Tx queue handler: %v", err)
+		if q.TxResultErrHandler != nil {
+			q.TxResultErrHandler(err)
+		}
+	} else if q.TxSuccessHandler != nil {
+		q.TxSuccessHandler(getTxResp)
+	}
+}
+
+func (c *CosmosClient) BroadcastTx(msg cosmostypes.Msg, adjustGas bool) (*tx.GetTxResponse, error) {
+	if err := c.updateAccSequence(); err != nil {
+		return nil, err
+	}
+
 	txBytes, err := c.signTxMsg(msg, adjustGas)
 	if err != nil {
 		return nil, err
 	}
-
-	c.account.Sequence++
 
 	resp, err := c.txClient.BroadcastTx(
 		context.Background(),
@@ -271,7 +353,17 @@ func (c *CosmosClient) BroadcastTx(msg cosmostypes.Msg, adjustGas bool) (*cosmos
 		return nil, err
 	}
 
-	return resp.TxResponse, c.handleBroadcastResult(resp.TxResponse, err)
+	for {
+		getTxResp, err := c.txClient.GetTx(context.Background(), &tx.GetTxRequest{Hash: resp.TxResponse.TxHash})
+		if err != nil {
+			if strings.Contains(err.Error(), "not found") {
+				time.Sleep(time.Second)
+				continue
+			}
+			return nil, err
+		}
+		return getTxResp, err
+	}
 }
 
 func (c *CosmosClient) decryptShare(shareCipher string) ([]byte, error) {
