@@ -178,7 +178,7 @@ func StartFairyRingClient(cfg config.Config) {
 			validatorCosmosClient.CosmosClient.AddTxToQueue(&types.MsgSendKeyshare{
 				Creator:       validatorCosmosClient.CosmosClient.GetAddress(),
 				Message:       extractedKeyHex,
-				KeyShareIndex: keyShareIndex,
+				KeyshareIndex: keyShareIndex,
 				BlockHeight:   processHeight,
 			}, true,
 				func(err error) {
@@ -367,7 +367,7 @@ func handleStartSubmitEncryptedKeyShareEvent(
 	validatorCosmosClient.CosmosClient.AddTxToQueue(&types.MsgSubmitEncryptedKeyshare{
 		Creator:           validatorCosmosClient.CosmosClient.GetAddress(),
 		Identity:          identity,
-		KeyShareIndex:     index,
+		KeyshareIndex:     index,
 		Requester:         requester,
 		EncryptedKeyshare: encryptedMessage,
 	}, true,
@@ -415,10 +415,10 @@ func handleStartSubmitGeneralKeyShareEvent(identity string) {
 	}
 	log.Printf("Derived General Key Share: %s\n", derivedShare)
 
-	validatorCosmosClient.CosmosClient.AddTxToQueue(&types.MsgCreateGeneralKeyShare{
+	validatorCosmosClient.CosmosClient.AddTxToQueue(&types.MsgSubmitGeneralKeyshare{
 		Creator:       validatorCosmosClient.CosmosClient.GetAddress(),
-		KeyShare:      derivedShare,
-		KeyShareIndex: index,
+		Keyshare:      derivedShare,
+		KeyshareIndex: index,
 		IdType:        "private-gov-identity",
 		IdValue:       identity,
 	}, true,
