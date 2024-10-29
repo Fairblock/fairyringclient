@@ -147,7 +147,7 @@ func (c *CosmosClient) updateAccSequence() error {
 func (c *CosmosClient) IsAddrAuthorized(target string) bool {
 	resp, err := c.keyshareQueryClient.AuthorizedAddress(
 		context.Background(),
-		&keysharetypes.QueryGetAuthorizedAddressRequest{
+		&keysharetypes.QueryAuthorizedAddressRequest{
 			Target: target,
 		},
 	)
@@ -168,10 +168,10 @@ func (c *CosmosClient) GetCommitments() (*keysharetypes.QueryCommitmentsResponse
 	return resp, nil
 }
 
-func (c *CosmosClient) GetActivePubKey() (*keysharetypes.QueryPubKeyResponse, error) {
-	resp, err := c.keyshareQueryClient.PubKey(
+func (c *CosmosClient) GetActivePubKey() (*keysharetypes.QueryPubkeyResponse, error) {
+	resp, err := c.keyshareQueryClient.Pubkey(
 		context.Background(),
-		&keysharetypes.QueryPubKeyRequest{},
+		&keysharetypes.QueryPubkeyRequest{},
 	)
 	if err != nil {
 		return nil, err
@@ -185,10 +185,10 @@ func (c *CosmosClient) GetKeyShare(getPendingShare bool) (*distIBE.Share, uint64
 		return nil, 0, 0, err
 	}
 
-	targetEncKeyShareList := pubKey.ActivePubKey.EncryptedKeyShares
+	targetEncKeyShareList := pubKey.ActivePubkey.EncryptedKeyshares
 
 	if getPendingShare {
-		targetEncKeyShareList = pubKey.QueuedPubKey.EncryptedKeyShares
+		targetEncKeyShareList = pubKey.QueuedPubkey.EncryptedKeyshares
 	}
 
 	if len(targetEncKeyShareList) == 0 {
@@ -207,10 +207,10 @@ func (c *CosmosClient) GetKeyShare(getPendingShare bool) (*distIBE.Share, uint64
 				return nil, 0, 0, err
 			}
 
-			expiryHeight := pubKey.ActivePubKey.Expiry
+			expiryHeight := pubKey.ActivePubkey.Expiry
 
 			if getPendingShare {
-				expiryHeight = pubKey.QueuedPubKey.Expiry
+				expiryHeight = pubKey.QueuedPubkey.Expiry
 			}
 
 			return parsedShare, uint64(keyShareIndex), expiryHeight, nil
