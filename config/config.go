@@ -14,7 +14,7 @@ const (
 	DefaultMetricsPort    = 2222
 	DefaultPauseThreshold = 5
 	DefaultFolderName     = ".fairyringclient"
-	DefaultChainID        = "fairyring-testnet-1"
+	DefaultChainID        = "fairyring-testnet-3"
 	DefaultDenom          = "ufairy"
 )
 
@@ -168,7 +168,7 @@ func setInitialConfig(c Config) {
 	viper.SetDefault("FairyRingNode.chainID", c.FairyRingNode.ChainID)
 
 	viper.SetDefault("PrivateKey", c.PrivateKey)
-	
+
 	viper.SetDefault("InvalidSharePauseThreshold", c.InvalidSharePauseThreshold)
 	viper.SetDefault("MetricsPort", c.MetricsPort)
 }
