@@ -7,11 +7,12 @@ import (
 	"fairyringclient/config"
 	"fairyringclient/pkg/cosmosClient"
 	"fmt"
+	"net/http"
+	"strings"
+
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/cosmos/cosmos-sdk/types/tx"
 	"github.com/pkg/errors"
-	"net/http"
-	"strings"
 
 	"github.com/Fairblock/fairyring/x/keyshare/types"
 	"github.com/prometheus/client_golang/prometheus"
@@ -80,7 +81,7 @@ func StartFairyRingClient(cfg config.Config) {
 	_ = validatorCosmosClient.UpdateKeyShareFromChain(false)
 	_ = validatorCosmosClient.UpdateKeyShareFromChain(true)
 
-	out, err := client.Subscribe(context.Background(), "", "tm.event = 'NewBlockEvents'")
+	out, err := client.Subscribe(context.Background(), "", "tm.event = 'NewBlock'")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -107,12 +108,17 @@ func StartFairyRingClient(cfg config.Config) {
 	for {
 		select {
 		case result := <-out:
-			newBlockEvents := result.Data.(tmtypes.EventDataNewBlockEvents)
+			newBlock := result.Data.(tmtypes.EventDataNewBlock)
 
-			height := newBlockEvents.Height
+			height := newBlock.Block.Height
 			fmt.Println("")
 
-			go handleEndBlockEvents(newBlockEvents.Events)
+			totalEventList := newBlock.ResultFinalizeBlock.Events
+			for _, txResult := range newBlock.ResultFinalizeBlock.TxResults {
+				totalEventList = append(totalEventList, txResult.Events...)
+			}
+
+			go handleEndBlockEvents(totalEventList)
 
 			processHeight := uint64(height + 1)
 			processHeightStr := strconv.FormatUint(processHeight, 10)
