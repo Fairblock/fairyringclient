@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
 	distIBE "github.com/FairBlock/DistributedIBE"
 	keysharetypes "github.com/Fairblock/fairyring/x/keyshare/types"
 	peptypes "github.com/Fairblock/fairyring/x/pep/types"
@@ -124,7 +125,7 @@ func NewCosmosClient(
 		accAddress:          accAddr,
 		publicKey:           pubKey,
 		chainID:             chainID,
-		txQueue:             make(chan QueuedTx, 3),
+		txQueue:             make(chan QueuedTx, 1),
 	}, nil
 }
 
@@ -287,18 +288,12 @@ func (c *CosmosClient) HandleTxQueue() error {
 			continue
 		}
 
-		go func() {
-			if err := c.updateAccSequence(); err != nil {
-				log.Printf("Error updating Account sequence in Tx queue handler: %v", err)
-				return
-			}
-
-			txBytes, err := c.signTxMsg(*queuedTx.Tx, queuedTx.AdjustGas)
+		go func(qTx QueuedTx) {
+			txBytes, err := c.signTxMsg(*qTx.Tx, qTx.AdjustGas)
 			if err != nil {
-				log.Printf("Error signing tx in Tx queue handler: %v", err)
+				qTx.TxResultErrHandler(errors.New(fmt.Sprintf("Error signing tx: %s", err.Error())))
 				return
 			}
-
 			resp, err := c.txClient.BroadcastTx(
 				context.Background(),
 				&tx.BroadcastTxRequest{
@@ -308,14 +303,17 @@ func (c *CosmosClient) HandleTxQueue() error {
 			)
 			if err != nil {
 				log.Printf("Error broadcasting tx in Tx queue handler: %v", err)
-				if queuedTx.TxResultErrHandler != nil {
-					queuedTx.TxResultErrHandler(err)
+				if qTx.TxResultErrHandler != nil {
+					qTx.TxResultErrHandler(err)
 				}
 				return
 			}
-
-			c.WaitForQueuedTx(queuedTx, resp.TxResponse.TxHash)
-		}()
+			if resp.TxResponse.Code != 0 {
+				qTx.TxResultErrHandler(errors.New(fmt.Sprintf("Error broadcasting tx: %s", resp.TxResponse.RawLog)))
+				return
+			}
+			c.WaitForQueuedTx(qTx, resp.TxResponse.TxHash)
+		}(queuedTx)
 
 	}
 }
@@ -413,6 +411,11 @@ func (c *CosmosClient) signTxMsg(msg cosmostypes.Msg, adjustGas bool) ([]byte, e
 
 	err := txBuilder.SetMsgs(msg)
 	if err != nil {
+		return nil, err
+	}
+	
+	if err := c.updateAccSequence(); err != nil {
+		log.Printf("Error updating Account sequence in Tx queue handler: %v", err)
 		return nil, err
 	}
 

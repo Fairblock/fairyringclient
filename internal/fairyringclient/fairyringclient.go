@@ -193,7 +193,7 @@ func StartFairyRingClient(cfg config.Config) {
 						log.Fatal("Transaction indexing is disabled on the node, please enable it or use another node with tx indexing, exiting FairyRingClient")
 					}
 					if strings.Contains(err.Error(), "account sequence mismatch") {
-						log.Fatal("Account sequence mismatch, exiting FairyRingClient")
+						log.Println("Account sequence mismatch, when submitting keyshares")
 					}
 				},
 				func(txResp *tx.GetTxResponse) {
@@ -430,6 +430,9 @@ func handleStartSubmitGeneralKeyShareEvent(identity string) {
 	}, true,
 		func(err error) {
 			log.Printf("Submit General KeyShare for Identity %s ERROR: %s\n", identity, err.Error())
+			if strings.Contains(err.Error(), "account sequence") {
+				handleStartSubmitGeneralKeyShareEvent(identity)
+			}
 		},
 		func(txResp *tx.GetTxResponse) {
 			if txResp.TxResponse.Code != 0 {
