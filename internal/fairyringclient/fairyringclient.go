@@ -431,7 +431,10 @@ func handleStartSubmitGeneralKeyShareEvent(identity string) {
 		func(err error) {
 			log.Printf("Submit General KeyShare for Identity %s ERROR: %s\n", identity, err.Error())
 			if strings.Contains(err.Error(), "account sequence") {
-				handleStartSubmitGeneralKeyShareEvent(identity)
+				go func(id string) {
+					time.Sleep(time.Millisecond * 500)
+					handleStartSubmitGeneralKeyShareEvent(id)
+				}(identity)
 			}
 		},
 		func(txResp *tx.GetTxResponse) {
