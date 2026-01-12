@@ -56,7 +56,7 @@ Using config file: /Users/fairblock/.fairyringclient/config.yml
 GRPC Endpoint: 192.168.1.100:9090
 FairyRing Node Endpoint: http://192.168.1.100:26666
 Chain ID: fairyring-testnet-3
-Chain Denom: ufairy
+Chain Denom: ufair
 InvalidSharePauseThreshold: 5
 MetricsPort: 2222
 ```
@@ -73,7 +73,7 @@ fairyringclient keys set "private key in hex"
 
 **The private key should be the validator address that is staking on `Fairyring` chain**
 
-Example: 
+Example:
 
 ```bash
 > fairyringclient keys set f5c691d4b53ec8c3a3ad35e88525f9b8f33d307b3414c93f1b856265409a3a04
@@ -111,7 +111,7 @@ Private Key:
 
 ### Address Delegation
 
-You can now delegate another address to submit the key share for you. 
+You can now delegate another address to submit the key share for you.
 Your address need to be a validator in the `keyshare` module in order to do this.
 
 You will also need the private key for your validator account set in the client config before running this command
