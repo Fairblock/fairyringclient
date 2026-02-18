@@ -376,6 +376,7 @@ func handleStartSubmitEncryptedKeyShareEvent(
 		KeyshareIndex:     index,
 		Requester:         requester,
 		EncryptedKeyshare: encryptedMessage,
+		SecpPubkey:        secpPubkey,
 	}, true,
 		func(err error) {
 			log.Printf("Submit Private KeyShare for Identity %s Requester %s Failed: %s\n", identity, requester, err.Error())

@@ -5,7 +5,7 @@ go 1.22.4
 require (
 	cosmossdk.io/math v1.3.0
 	github.com/FairBlock/DistributedIBE v0.0.0-20231211202607-d457df6869db
-	github.com/Fairblock/fairyring v0.10.2
+	github.com/Fairblock/fairyring v0.11.0
 	github.com/btcsuite/btcd v0.22.3
 	github.com/cometbft/cometbft v0.38.12
 	github.com/cosmos/cosmos-sdk v0.50.8
