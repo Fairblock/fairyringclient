@@ -2,12 +2,13 @@ package config
 
 import (
 	"fmt"
-	"github.com/cometbft/cometbft/crypto"
-	"github.com/spf13/viper"
 	"log"
 	"os"
 	"path/filepath"
 	"strconv"
+
+	"github.com/cometbft/cometbft/crypto"
+	"github.com/spf13/viper"
 )
 
 const (
@@ -15,7 +16,7 @@ const (
 	DefaultPauseThreshold = 5
 	DefaultFolderName     = ".fairyringclient"
 	DefaultChainID        = "fairyring-testnet-3"
-	DefaultDenom          = "ufairy"
+	DefaultDenom          = "ufair"
 )
 
 type Node struct {

@@ -56,7 +56,7 @@ Using config file: /Users/fairblock/.fairyringclient/config.yml
 GRPC Endpoint: 192.168.1.100:9090
 FairyRing Node Endpoint: http://192.168.1.100:26666
 Chain ID: fairyring-testnet-3
-Chain Denom: ufairy
+Chain Denom: ufair
 InvalidSharePauseThreshold: 5
 MetricsPort: 2222
 ```
