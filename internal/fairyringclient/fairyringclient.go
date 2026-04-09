@@ -64,6 +64,7 @@ var (
 func StartFairyRingClient(cfg config.Config) {
 
 	PauseThreshold := cfg.InvalidSharePauseThreshold
+	submitBlockwiseKeyshares := cfg.SubmitBlockwiseKeyshares
 
 	vCosmosClient, client, err := InitializeValidatorClient(cfg)
 	if err != nil {
@@ -99,6 +100,8 @@ func StartFairyRingClient(cfg config.Config) {
 	log.Printf("Metrics is listening on port: %d\n", cfg.MetricsPort)
 	go http.ListenAndServe(fmt.Sprintf(":%d", cfg.MetricsPort), nil)
 
+	log.Printf("Blockwise keyshare submission enabled: %t\n", submitBlockwiseKeyshares)
+
 	go func() {
 		if err := validatorCosmosClient.CosmosClient.HandleTxQueue(); err != nil {
 			log.Printf("Error in queued tx handler: %v", err)
@@ -122,6 +125,11 @@ func StartFairyRingClient(cfg config.Config) {
 
 			processHeight := uint64(height + 1)
 			processHeightStr := strconv.FormatUint(processHeight, 10)
+
+			if !submitBlockwiseKeyshares {
+				log.Printf("Latest Block Height: %d | Blockwise keyshare submission disabled, skipping height %s\n", height, processHeightStr)
+				continue
+			}
 
 			log.Printf("Latest Block Height: %d | Deriving Share for Height: %s\n", height, processHeightStr)
 

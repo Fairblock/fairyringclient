@@ -26,6 +26,7 @@ var configUpdateCmd = &cobra.Command{
 		chainPort, _ := cmd.Flags().GetUint64("port")
 		pauseThreshold, _ := cmd.Flags().GetUint64("pause-threshold")
 		metricsPort, _ := cmd.Flags().GetUint64("metrics-port")
+		submitBlockwiseKeyshares, _ := cmd.Flags().GetBool("submit-blockwise-keyshares")
 
 		cfg.FairyRingNode = config.Node{
 			Protocol: chainProtocol,
@@ -38,6 +39,7 @@ var configUpdateCmd = &cobra.Command{
 
 		cfg.InvalidSharePauseThreshold = pauseThreshold
 		cfg.MetricsPort = metricsPort
+		cfg.SubmitBlockwiseKeyshares = submitBlockwiseKeyshares
 
 		if err = cfg.SaveConfig(); err != nil {
 			fmt.Printf("Error saving updated config to system: %s\n", err.Error())
@@ -63,4 +65,5 @@ func init() {
 	configUpdateCmd.Flags().String("protocol", cfg.FairyRingNode.Protocol, "Update config node protocol")
 	configUpdateCmd.Flags().Uint64("pause-threshold", cfg.InvalidSharePauseThreshold, "Update the threshold of when the client pause if number of invalid share in a row reaches threshold")
 	configUpdateCmd.Flags().Uint64("metrics-port", cfg.MetricsPort, "Update the port of metrics listen to")
+	configUpdateCmd.Flags().Bool("submit-blockwise-keyshares", cfg.SubmitBlockwiseKeyshares, "Enable or disable blockwise keyshare submission")
 }

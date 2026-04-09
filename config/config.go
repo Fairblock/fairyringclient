@@ -35,6 +35,7 @@ type Config struct {
 	MasterPrivateKey           string
 	InvalidSharePauseThreshold uint64
 	MetricsPort                uint64
+	SubmitBlockwiseKeyshares   bool
 }
 
 func ReadConfigFromFile() (*Config, error) {
@@ -143,6 +144,7 @@ func DefaultConfig(withCosmosKey bool) Config {
 		MasterPrivateKey:           "",
 		InvalidSharePauseThreshold: DefaultPauseThreshold,
 		MetricsPort:                DefaultMetricsPort,
+		SubmitBlockwiseKeyshares:   false,
 	}
 }
 
@@ -158,6 +160,7 @@ func updateConfig(c Config) {
 
 	viper.Set("InvalidSharePauseThreshold", c.InvalidSharePauseThreshold)
 	viper.Set("MetricsPort", c.MetricsPort)
+	viper.Set("SubmitBlockwiseKeyshares", c.SubmitBlockwiseKeyshares)
 }
 
 func setInitialConfig(c Config) {
@@ -172,4 +175,5 @@ func setInitialConfig(c Config) {
 
 	viper.SetDefault("InvalidSharePauseThreshold", c.InvalidSharePauseThreshold)
 	viper.SetDefault("MetricsPort", c.MetricsPort)
+	viper.SetDefault("SubmitBlockwiseKeyshares", c.SubmitBlockwiseKeyshares)
 }

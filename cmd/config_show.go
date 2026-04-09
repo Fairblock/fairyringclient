@@ -3,6 +3,7 @@ package cmd
 import (
 	"fairyringclient/config"
 	"fmt"
+
 	"github.com/spf13/cobra"
 )
 
@@ -24,6 +25,7 @@ Chain ID: %s
 Chain Denom: %s
 InvalidSharePauseThreshold: %d
 MetricsPort: %d
-`, cfg.GetGRPCEndpoint(), cfg.GetFairyRingNodeURI(), cfg.FairyRingNode.ChainID, cfg.FairyRingNode.Denom, cfg.InvalidSharePauseThreshold, cfg.MetricsPort)
+SubmitBlockwiseKeyshares: %t
+`, cfg.GetGRPCEndpoint(), cfg.GetFairyRingNodeURI(), cfg.FairyRingNode.ChainID, cfg.FairyRingNode.Denom, cfg.InvalidSharePauseThreshold, cfg.MetricsPort, cfg.SubmitBlockwiseKeyshares)
 	},
 }
