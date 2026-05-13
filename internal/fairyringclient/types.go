@@ -96,6 +96,109 @@ func (v *ValidatorClients) RemovePendingShare() {
 	v.PendingShareExpiryBlock = 0
 }
 
+func remainingBlocks(expiry uint64, height uint64) uint64 {
+	if expiry <= height {
+		return 0
+	}
+	return expiry - height
+}
+
+func (v *ValidatorClients) logShareState(height uint64) {
+	if v.CurrentShare != nil {
+		log.Printf("Current Share Expires at: %d, in %d blocks | %v",
+			v.CurrentShareExpiryBlock,
+			remainingBlocks(v.CurrentShareExpiryBlock, height),
+			v.CurrentShare.Share,
+		)
+	}
+
+	if v.PendingShare != nil {
+		log.Printf("Pending Share expires at: %d, in %d blocks | %v",
+			v.PendingShareExpiryBlock,
+			remainingBlocks(v.PendingShareExpiryBlock, height),
+			v.PendingShare.Share,
+		)
+	}
+}
+
+func (v *ValidatorClients) resetAfterShareSwitch() {
+	v.ResetInvalidShareNum()
+
+	if v.Paused {
+		v.Unpause()
+		log.Printf("Client Unpaused, Current invalid share count: %d\n", v.InvalidShareInARow)
+	}
+}
+
+func (v *ValidatorClients) SyncCurrentShareWithChain(latestBlockHeight uint64) error {
+	if v.CurrentShare == nil {
+		log.Println("Current Share not found, Getting Share from FairyRing")
+		if err := v.UpdateKeyShareFromChain(false); err != nil {
+			return err
+		}
+	}
+
+	// If the local current share has already expired on-chain, do not fetch the
+	// pending share. At this point the old pending share is already the chain's
+	// active share, so either activate the locally cached pending share or fetch
+	// the active share again from the chain.
+	if v.CurrentShareExpiryBlock != 0 && v.CurrentShareExpiryBlock <= latestBlockHeight {
+		log.Printf(
+			"Local current share expired at block %d, latest block is %d. Syncing active share from chain\n",
+			v.CurrentShareExpiryBlock,
+			latestBlockHeight,
+		)
+
+		v.RemoveCurrentShare()
+
+		if v.PendingShare != nil && v.PendingShareExpiryBlock > latestBlockHeight {
+			v.ActivatePendingShare()
+			log.Printf("Activated locally cached pending key share, New Share: %v\n", v.CurrentShare.Share.Value.String())
+		} else {
+			v.RemovePendingShare()
+			if err := v.UpdateKeyShareFromChain(false); err != nil {
+				return err
+			}
+			log.Printf("Fetched active key share from chain, New Share: %v\n", v.CurrentShare.Share.Value.String())
+		}
+
+		v.resetAfterShareSwitch()
+	}
+
+	return nil
+}
+
+func (v *ValidatorClients) PrepareShareForTargetHeight(targetHeight uint64) error {
+	if v.CurrentShare == nil {
+		log.Println("Current Share not found, Getting Share from FairyRing")
+		if err := v.UpdateKeyShareFromChain(false); err != nil {
+			return err
+		}
+	}
+
+	// Blockwise keyshares are submitted for the next height. If the current share
+	// expires at or before that target height, the keyshare for that height must
+	// be derived from the queued share.
+	if v.CurrentShareExpiryBlock != 0 && v.CurrentShareExpiryBlock <= targetHeight {
+		log.Println("Current share expires before target height, switching to the queued one")
+		v.RemoveCurrentShare()
+
+		if v.PendingShare == nil || v.PendingShareExpiryBlock <= targetHeight {
+			v.RemovePendingShare()
+			log.Println("Pending share not found or stale, Getting pending share from FairyRing now")
+			if err := v.UpdateKeyShareFromChain(true); err != nil {
+				return err
+			}
+		}
+
+		v.ActivatePendingShare()
+		v.resetAfterShareSwitch()
+		log.Printf("Activated pending key share, New Share: %v\n", v.CurrentShare.Share.Value.String())
+	}
+
+	return nil
+}
+
 func (v *ValidatorClients) UpdateKeyShareFromChain(forNextRound bool) error {
 	share, shareIndex, expiry, err := v.CosmosClient.GetKeyShare(forNextRound)
 	if err != nil {

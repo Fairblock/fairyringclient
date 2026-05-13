@@ -121,10 +121,27 @@ func StartFairyRingClient(cfg config.Config) {
 				totalEventList = append(totalEventList, txResult.Events...)
 			}
 
-			go handleEndBlockEvents(totalEventList)
-
 			processHeight := uint64(height + 1)
 			processHeightStr := strconv.FormatUint(processHeight, 10)
+			latestBlockHeight := uint64(height)
+
+			// Always keep the local current share synced with the chain, even when
+			// blockwise keyshare submission is disabled. Private/general keyshare
+			// events are handled independently of blockwise submission and must not use
+			// an expired local share.
+			if err := validatorCosmosClient.SyncCurrentShareWithChain(latestBlockHeight); err != nil {
+				log.Printf("Unable to sync current share at height %d: %s\n", height, err.Error())
+				continue
+			}
+
+			validatorCosmosClient.logShareState(latestBlockHeight)
+			currentShareExpiry.Set(float64(validatorCosmosClient.CurrentShareExpiryBlock))
+
+			// Handle private/general keyshare events after syncing stale local shares,
+			// but before switching to the queued share for next-height blockwise
+			// submission. These events should use the current active share for the
+			// block that emitted the event.
+			handleEndBlockEvents(totalEventList)
 
 			if !submitBlockwiseKeyshares {
 				log.Printf("Latest Block Height: %d | Blockwise keyshare submission disabled, skipping height %s\n", height, processHeightStr)
@@ -133,51 +150,13 @@ func StartFairyRingClient(cfg config.Config) {
 
 			log.Printf("Latest Block Height: %d | Deriving Share for Height: %s\n", height, processHeightStr)
 
-			if validatorCosmosClient.CurrentShare == nil {
-				log.Println("Current Share not found, Getting Share from FairyRing")
-				if err := validatorCosmosClient.UpdateKeyShareFromChain(false); err != nil {
-					continue
-				}
-			}
-			log.Printf("Current Share Expires at: %d, in %d blocks | %v",
-				validatorCosmosClient.CurrentShareExpiryBlock,
-				validatorCosmosClient.CurrentShareExpiryBlock-uint64(height),
-				validatorCosmosClient.CurrentShare.Share,
-			)
-			if validatorCosmosClient.PendingShare != nil {
-				log.Printf("Pending Share expires at: %d, in %d blocks | %v",
-					validatorCosmosClient.PendingShareExpiryBlock,
-					validatorCosmosClient.PendingShareExpiryBlock-uint64(height),
-					validatorCosmosClient.PendingShare.Share,
-				)
-			}
-			// When it is time to switch key share
-			if validatorCosmosClient.CurrentShareExpiryBlock != 0 && validatorCosmosClient.CurrentShareExpiryBlock <= processHeight {
-				log.Println("Current share expired, Switching to the queued one")
-				validatorCosmosClient.RemoveCurrentShare()
-
-				// But pending key share not found
-				if validatorCosmosClient.PendingShare == nil {
-					log.Println("Pending share not found, Getting share from FairyRing now")
-					if err = validatorCosmosClient.UpdateKeyShareFromChain(true); err != nil {
-						continue
-					}
-				}
-
-				validatorCosmosClient.ResetInvalidShareNum()
-
-				if validatorCosmosClient.Paused {
-					validatorCosmosClient.Unpause()
-					log.Printf("Client Unpaused, Current invalid share count: %d\n", validatorCosmosClient.InvalidShareInARow)
-				}
-
-				validatorCosmosClient.ActivatePendingShare()
-				log.Printf("Activated pending key share, New Share: %v\n", validatorCosmosClient.CurrentShare.Share.Value.String())
+			if err := validatorCosmosClient.PrepareShareForTargetHeight(processHeight); err != nil {
+				log.Printf("Unable to prepare share for height %s: %s\n", processHeightStr, err.Error())
+				continue
 			}
 
-			go func() {
-				defer currentShareExpiry.Set(float64(validatorCosmosClient.CurrentShareExpiryBlock))
-			}()
+			validatorCosmosClient.logShareState(latestBlockHeight)
+			currentShareExpiry.Set(float64(validatorCosmosClient.CurrentShareExpiryBlock))
 
 			if validatorCosmosClient.Paused {
 				log.Printf("Client paused, Skip submitting keyshare for height %s, Waiting until next round\n", processHeightStr)
