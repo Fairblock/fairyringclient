@@ -459,10 +459,11 @@ func (c *CosmosClient) signTxMsg(msg cosmostypes.Msg, adjustGas bool) ([]byte, e
 			WithSequence(c.account.Sequence).
 			WithGasAdjustment(defaultGasAdjustment)
 
-		_, newGasLimit, err := clienttx.CalculateGas(c.grpcConn, txf, msg)
+		_, calculatedGasLimit, err := clienttx.CalculateGas(c.grpcConn, txf, msg)
 		if err != nil {
 			return nil, err
 		}
+		newGasLimit = calculatedGasLimit
 	}
 
 	txBuilder.SetGasLimit(newGasLimit)
