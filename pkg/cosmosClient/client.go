@@ -5,18 +5,14 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	distIBE "github.com/FairBlock/DistributedIBE"
-	keysharetypes "github.com/Fairblock/fairyring/x/keyshare/types"
-	peptypes "github.com/Fairblock/fairyring/x/pep/types"
-	dcrdSecp256k1 "github.com/decred/dcrd/dcrec/secp256k1"
-	bls "github.com/drand/kyber-bls12381"
-	"github.com/skip-mev/block-sdk/v2/testutils"
 	"log"
 	"strings"
 	"time"
 
 	"cosmossdk.io/math"
-
+	distIBE "github.com/FairBlock/DistributedIBE"
+	keysharetypes "github.com/Fairblock/fairyring/x/keyshare/types"
+	peptypes "github.com/Fairblock/fairyring/x/pep/types"
 	clienttx "github.com/cosmos/cosmos-sdk/client/tx"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
@@ -26,7 +22,10 @@ import (
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+	dcrdSecp256k1 "github.com/decred/dcrd/dcrec/secp256k1"
+	bls "github.com/drand/kyber-bls12381"
 	"github.com/pkg/errors"
+	"github.com/skip-mev/block-sdk/v2/testutils"
 	"google.golang.org/grpc"
 )
 
@@ -55,6 +54,8 @@ type CosmosClient struct {
 	account             authtypes.BaseAccount
 	accAddress          cosmostypes.AccAddress
 	chainID             string
+	feeDenom            string
+	gasPrice            math.LegacyDec
 	txQueue             chan QueuedTx
 }
 
@@ -62,6 +63,8 @@ func NewCosmosClient(
 	endpoint string,
 	privateKeyHex string,
 	chainID string,
+	feeDenom string,
+	gasPriceString string,
 ) (*CosmosClient, error) {
 	grpcConn, err := grpc.Dial(
 		endpoint,
@@ -69,6 +72,18 @@ func NewCosmosClient(
 	)
 	if err != nil {
 		return nil, err
+	}
+
+	if feeDenom == "" {
+		return nil, errors.New("fee denom must not be empty")
+	}
+
+	gasPrice, err := math.LegacyNewDecFromStr(gasPriceString)
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid gas price")
+	}
+	if !gasPrice.IsPositive() {
+		return nil, errors.New("gas price must be positive")
 	}
 
 	authClient := authtypes.NewQueryClient(grpcConn)
@@ -79,6 +94,9 @@ func NewCosmosClient(
 	keyBytes, err := hex.DecodeString(privateKeyHex)
 	if err != nil {
 		return nil, err
+	}
+	if len(keyBytes) != 32 {
+		return nil, errors.New("private key must decode to exactly 32 bytes")
 	}
 
 	privateKey := secp256k1.PrivKey{Key: keyBytes}
@@ -101,14 +119,12 @@ func NewCosmosClient(
 		context.Background(),
 		&authtypes.QueryAccountRequest{Address: addr},
 	)
-
 	if err != nil {
 		log.Println(cosmostypes.AccAddress(address).String())
 		return nil, err
 	}
 
-	err = baseAccount.Unmarshal(resp.Account.Value)
-	if err != nil {
+	if err = baseAccount.Unmarshal(resp.Account.Value); err != nil {
 		return nil, err
 	}
 
@@ -125,18 +141,22 @@ func NewCosmosClient(
 		accAddress:          accAddr,
 		publicKey:           pubKey,
 		chainID:             chainID,
+		feeDenom:            feeDenom,
+		gasPrice:            gasPrice,
 		txQueue:             make(chan QueuedTx, 1),
 	}, nil
 }
 
 func (c *CosmosClient) updateAccSequence() error {
-	out, err := c.authClient.Account(context.Background(),
-		&authtypes.QueryAccountRequest{Address: c.accAddress.String()})
+	out, err := c.authClient.Account(
+		context.Background(),
+		&authtypes.QueryAccountRequest{Address: c.accAddress.String()},
+	)
 	if err != nil {
 		return err
 	}
-	var baseAccount authtypes.BaseAccount
 
+	var baseAccount authtypes.BaseAccount
 	if err = baseAccount.Unmarshal(out.Account.Value); err != nil {
 		return err
 	}
@@ -148,9 +168,7 @@ func (c *CosmosClient) updateAccSequence() error {
 func (c *CosmosClient) IsAddrAuthorized(target string) bool {
 	resp, err := c.keyshareQueryClient.AuthorizedAddress(
 		context.Background(),
-		&keysharetypes.QueryAuthorizedAddressRequest{
-			Target: target,
-		},
+		&keysharetypes.QueryAuthorizedAddressRequest{Target: target},
 	)
 	if err != nil {
 		return false
@@ -187,7 +205,6 @@ func (c *CosmosClient) GetKeyShare(getPendingShare bool) (*distIBE.Share, uint64
 	}
 
 	targetEncKeyShareList := pubKey.ActivePubkey.EncryptedKeyshares
-
 	if getPendingShare {
 		targetEncKeyShareList = pubKey.QueuedPubkey.EncryptedKeyshares
 	}
@@ -197,26 +214,29 @@ func (c *CosmosClient) GetKeyShare(getPendingShare bool) (*distIBE.Share, uint64
 	}
 
 	for index, val := range targetEncKeyShareList {
-		if val.Validator == c.GetAddress() {
-			decryptedByte, err := c.decryptShare(val.Data)
-			if err != nil {
-				return nil, 0, 0, err
-			}
-			keyShareIndex := index + 1
-			parsedShare, err := c.parseShare(decryptedByte, int64(keyShareIndex))
-			if err != nil {
-				return nil, 0, 0, err
-			}
-
-			expiryHeight := pubKey.ActivePubkey.Expiry
-
-			if getPendingShare {
-				expiryHeight = pubKey.QueuedPubkey.Expiry
-			}
-
-			return parsedShare, uint64(keyShareIndex), expiryHeight, nil
+		if val.Validator != c.GetAddress() {
+			continue
 		}
+
+		decryptedByte, err := c.decryptShare(val.Data)
+		if err != nil {
+			return nil, 0, 0, err
+		}
+
+		keyShareIndex := index + 1
+		parsedShare, err := c.parseShare(decryptedByte, int64(keyShareIndex))
+		if err != nil {
+			return nil, 0, 0, err
+		}
+
+		expiryHeight := pubKey.ActivePubkey.Expiry
+		if getPendingShare {
+			expiryHeight = pubKey.QueuedPubkey.Expiry
+		}
+
+		return parsedShare, uint64(keyShareIndex), expiryHeight, nil
 	}
+
 	return nil, 0, 0, errors.New("encrypted share for your validator not found")
 }
 
@@ -288,33 +308,39 @@ func (c *CosmosClient) HandleTxQueue() error {
 			continue
 		}
 
-		go func(qTx QueuedTx) {
-			txBytes, err := c.signTxMsg(*qTx.Tx, qTx.AdjustGas)
-			if err != nil {
-				qTx.TxResultErrHandler(errors.New(fmt.Sprintf("Error signing tx: %s", err.Error())))
-				return
+		txBytes, err := c.signTxMsg(*queuedTx.Tx, queuedTx.AdjustGas)
+		if err != nil {
+			if queuedTx.TxResultErrHandler != nil {
+				queuedTx.TxResultErrHandler(fmt.Errorf("error signing tx: %w", err))
 			}
-			resp, err := c.txClient.BroadcastTx(
-				context.Background(),
-				&tx.BroadcastTxRequest{
-					TxBytes: txBytes,
-					Mode:    tx.BroadcastMode_BROADCAST_MODE_SYNC,
-				},
-			)
-			if err != nil {
-				log.Printf("Error broadcasting tx in Tx queue handler: %v", err)
-				if qTx.TxResultErrHandler != nil {
-					qTx.TxResultErrHandler(err)
-				}
-				return
-			}
-			if resp.TxResponse.Code != 0 {
-				qTx.TxResultErrHandler(errors.New(fmt.Sprintf("Error broadcasting tx: %s", resp.TxResponse.RawLog)))
-				return
-			}
-			c.WaitForQueuedTx(qTx, resp.TxResponse.TxHash)
-		}(queuedTx)
+			continue
+		}
 
+		resp, err := c.txClient.BroadcastTx(
+			context.Background(),
+			&tx.BroadcastTxRequest{
+				TxBytes: txBytes,
+				Mode:    tx.BroadcastMode_BROADCAST_MODE_SYNC,
+			},
+		)
+		if err != nil {
+			log.Printf("Error broadcasting tx in Tx queue handler: %v", err)
+			if queuedTx.TxResultErrHandler != nil {
+				queuedTx.TxResultErrHandler(err)
+			}
+			continue
+		}
+
+		if resp.TxResponse.Code != 0 {
+			if queuedTx.TxResultErrHandler != nil {
+				queuedTx.TxResultErrHandler(fmt.Errorf("error broadcasting tx: %s", resp.TxResponse.RawLog))
+			}
+			continue
+		}
+
+		// Process queued transactions serially all the way through commit so the
+		// next item observes the incremented account sequence.
+		c.WaitForQueuedTx(queuedTx, resp.TxResponse.TxHash)
 	}
 }
 
@@ -325,7 +351,10 @@ func (c *CosmosClient) WaitForQueuedTx(q QueuedTx, txHash string) {
 		if q.TxResultErrHandler != nil {
 			q.TxResultErrHandler(err)
 		}
-	} else if q.TxSuccessHandler != nil {
+		return
+	}
+
+	if q.TxSuccessHandler != nil {
 		q.TxSuccessHandler(getTxResp)
 	}
 }
@@ -350,18 +379,15 @@ func (c *CosmosClient) BroadcastTx(msg cosmostypes.Msg, adjustGas bool) (*tx.Get
 	if err != nil {
 		return nil, err
 	}
-
-	for {
-		getTxResp, err := c.txClient.GetTx(context.Background(), &tx.GetTxRequest{Hash: resp.TxResponse.TxHash})
-		if err != nil {
-			if strings.Contains(err.Error(), "not found") {
-				time.Sleep(time.Second)
-				continue
-			}
-			return nil, err
-		}
-		return getTxResp, err
+	if resp.TxResponse.Code != 0 {
+		return nil, errors.Errorf(
+			"error code: '%d' msg: '%s'",
+			resp.TxResponse.Code,
+			resp.TxResponse.RawLog,
+		)
 	}
+
+	return c.WaitForTx(resp.TxResponse.TxHash, time.Second)
 }
 
 func (c *CosmosClient) decryptShare(shareCipher string) ([]byte, error) {
@@ -380,10 +406,10 @@ func (c *CosmosClient) decryptShare(shareCipher string) ([]byte, error) {
 
 func (c *CosmosClient) parseShare(shareByte []byte, index int64) (*distIBE.Share, error) {
 	parsedShare := bls.NewKyberScalar()
-	err := parsedShare.UnmarshalBinary(shareByte)
-	if err != nil {
+	if err := parsedShare.UnmarshalBinary(shareByte); err != nil {
 		return nil, err
 	}
+
 	return &distIBE.Share{
 		Index: bls.NewKyberScalar().SetInt64(index),
 		Value: parsedShare,
@@ -400,8 +426,12 @@ func (c *CosmosClient) WaitForTx(hash string, rate time.Duration) (*tx.GetTxResp
 			}
 			return nil, err
 		}
-		return resp, err
+		return resp, nil
 	}
+}
+
+func calculateFeeAmount(gasPrice math.LegacyDec, gasLimit uint64) math.Int {
+	return gasPrice.MulInt(math.NewIntFromUint64(gasLimit)).Ceil().TruncateInt()
 }
 
 func (c *CosmosClient) signTxMsg(msg cosmostypes.Msg, adjustGas bool) ([]byte, error) {
@@ -409,17 +439,16 @@ func (c *CosmosClient) signTxMsg(msg cosmostypes.Msg, adjustGas bool) ([]byte, e
 	txBuilder := encodingCfg.TxConfig.NewTxBuilder()
 	encodingCfg.TxConfig.SignModeHandler().DefaultMode()
 
-	err := txBuilder.SetMsgs(msg)
-	if err != nil {
+	if err := txBuilder.SetMsgs(msg); err != nil {
 		return nil, err
 	}
-	
+
 	if err := c.updateAccSequence(); err != nil {
 		log.Printf("Error updating Account sequence in Tx queue handler: %v", err)
 		return nil, err
 	}
 
-	var newGasLimit uint64 = defaultGasLimit
+	newGasLimit := uint64(defaultGasLimit)
 	if adjustGas {
 		txf := clienttx.Factory{}.
 			WithGas(defaultGasLimit).
@@ -430,13 +459,20 @@ func (c *CosmosClient) signTxMsg(msg cosmostypes.Msg, adjustGas bool) ([]byte, e
 			WithSequence(c.account.Sequence).
 			WithGasAdjustment(defaultGasAdjustment)
 
-		_, newGasLimit, err = clienttx.CalculateGas(c.grpcConn, txf, msg)
+		_, calculatedGasLimit, err := clienttx.CalculateGas(c.grpcConn, txf, msg)
 		if err != nil {
 			return nil, err
 		}
+		newGasLimit = calculatedGasLimit
 	}
 
 	txBuilder.SetGasLimit(newGasLimit)
+
+	feeAmount := calculateFeeAmount(c.gasPrice, newGasLimit)
+	if !feeAmount.IsPositive() {
+		return nil, errors.New("calculated transaction fee must be positive")
+	}
+	txBuilder.SetFeeAmount(cosmostypes.NewCoins(cosmostypes.NewCoin(c.feeDenom, feeAmount)))
 
 	signerData := authsigning.SignerData{
 		ChainID:       c.chainID,
@@ -464,9 +500,11 @@ func (c *CosmosClient) signTxMsg(msg cosmostypes.Msg, adjustGas bool) ([]byte, e
 		context.Background(), 1, signerData, txBuilder, &c.privateKey,
 		encodingCfg.TxConfig, c.account.Sequence,
 	)
-
-	err = txBuilder.SetSignatures(sigV2)
 	if err != nil {
+		return nil, err
+	}
+
+	if err = txBuilder.SetSignatures(sigV2); err != nil {
 		return nil, err
 	}
 
