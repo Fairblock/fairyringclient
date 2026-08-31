@@ -23,9 +23,10 @@ var configShowCmd = &cobra.Command{
 FairyRing Node Endpoint: %s
 Chain ID: %s
 Chain Denom: %s
+Gas Price: %s
 InvalidSharePauseThreshold: %d
 MetricsPort: %d
 SubmitBlockwiseKeyshares: %t
-`, cfg.GetGRPCEndpoint(), cfg.GetFairyRingNodeURI(), cfg.FairyRingNode.ChainID, cfg.FairyRingNode.Denom, cfg.InvalidSharePauseThreshold, cfg.MetricsPort, cfg.SubmitBlockwiseKeyshares)
+`, cfg.GetGRPCEndpoint(), cfg.GetFairyRingNodeURI(), cfg.FairyRingNode.ChainID, cfg.FairyRingNode.Denom, cfg.FairyRingNode.GasPrice, cfg.InvalidSharePauseThreshold, cfg.MetricsPort, cfg.SubmitBlockwiseKeyshares)
 	},
 }
