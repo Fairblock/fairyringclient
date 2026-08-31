@@ -4,9 +4,10 @@ import (
 	"fairyringclient/config"
 	"fairyringclient/pkg/cosmosClient"
 	"fmt"
+	"log"
+
 	"github.com/Fairblock/fairyring/x/keyshare/types"
 	"github.com/spf13/cobra"
-	"log"
 )
 
 // delegateRemove represents the delegate add command
@@ -16,7 +17,6 @@ var delegateRemove = &cobra.Command{
 	Long:  `Remove an authorized address for submitting key share`,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-
 		cfg, err := config.ReadConfigFromFile()
 		if err != nil {
 			fmt.Printf("Error loading config from file: %s\n", err.Error())
@@ -33,8 +33,9 @@ var delegateRemove = &cobra.Command{
 			gRPCEndpoint,
 			cfg.PrivateKey,
 			cfg.FairyRingNode.ChainID,
+			cfg.FairyRingNode.Denom,
+			cfg.FairyRingNode.GasPrice,
 		)
-
 		if err != nil {
 			log.Fatalf("Error creating custom cosmos client, make sure provided account is activated: %v\n", err)
 		}
@@ -49,7 +50,6 @@ var delegateRemove = &cobra.Command{
 		}
 
 		txResp, err := eachClient.BroadcastTx(&msg, false)
-
 		if err != nil {
 			log.Fatalf("unable to broadcast delete authorized address message, ERROR: %s\n", err.Error())
 		}
