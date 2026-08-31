@@ -2,10 +2,11 @@ package cmd
 
 import (
 	"fmt"
+
 	"github.com/spf13/cobra"
 )
 
-const ClientVersion = "v0.7.1"
+const ClientVersion = "v1.0.1"
 
 // configCmd represents the config command
 var versionCmd = &cobra.Command{
