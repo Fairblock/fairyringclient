@@ -177,7 +177,7 @@ func StartFairyRingClient(cfg config.Config) {
 					}
 				},
 				func(txResp *tx.GetTxResponse) {
-					if hasCoinSpentEvent(txResp.TxResponse.Events) {
+					if hasSlashingCoinSpentEvent(txResp.TxResponse.Events, validatorCosmosClient.CosmosClient.GetAddress()) {
 						validatorCosmosClient.IncreaseInvalidShareNum()
 						log.Printf("KeyShare for Height %s is INVALID, Got Slashed, Current number invalid share in a row: %d\n", processHeightStr, validatorCosmosClient.InvalidShareInARow)
 						defer invalidShareSubmitted.Inc()
@@ -257,10 +257,16 @@ func InitializeValidatorClient(cfg config.Config) (*ValidatorClients, *tmclient.
 	return &ValidatorClients{CosmosClient: vCosmosClient}, client, nil
 }
 
-func hasCoinSpentEvent(e []abciTypes.Event) bool {
-	for _, eachEvent := range e {
-		if eachEvent.Type == "coin_spent" {
-			return true
+func hasSlashingCoinSpentEvent(events []abciTypes.Event, feePayer string) bool {
+	for _, event := range events {
+		if event.Type != "coin_spent" {
+			continue
+		}
+
+		for _, attribute := range event.Attributes {
+			if attribute.Key == "spender" && attribute.Value != "" && attribute.Value != feePayer {
+				return true
+			}
 		}
 	}
 	return false
