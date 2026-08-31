@@ -17,6 +17,7 @@ const (
 	DefaultFolderName     = ".fairyringclient"
 	DefaultChainID        = "fairyring-testnet-3"
 	DefaultDenom          = "ufair"
+	DefaultGasPrice       = "0.025"
 )
 
 type Node struct {
@@ -26,6 +27,7 @@ type Node struct {
 	GRPCPort uint64
 	Denom    string
 	ChainID  string
+	GasPrice string
 }
 
 type Config struct {
@@ -75,7 +77,7 @@ func (c *Config) SaveConfig() error {
 	updateConfig(*c)
 
 	if err := viper.WriteConfig(); err != nil {
-		fmt.Errorf("failed to write config as : %s", err.Error())
+		return fmt.Errorf("failed to write config: %w", err)
 	}
 
 	return nil
@@ -84,7 +86,7 @@ func (c *Config) SaveConfig() error {
 func (c *Config) ExportConfig() error {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	if _, err := os.Stat(homeDir + "/" + DefaultFolderName); os.IsNotExist(err) {
@@ -97,7 +99,6 @@ func (c *Config) ExportConfig() error {
 	filePath := filepath.Join(homeDir+"/"+DefaultFolderName, "config.yml")
 	_, err = os.Stat(filePath)
 	if os.IsNotExist(err) {
-		// File does not exist, create it
 		log.Println("Initializing FairyRing Client default config...")
 
 		file, err := os.Create(filePath)
@@ -117,7 +118,7 @@ func (c *Config) ExportConfig() error {
 	setInitialConfig(*c)
 
 	if err = viper.WriteConfigAs(homeDir + "/" + DefaultFolderName + "/config.yml"); err != nil {
-		fmt.Errorf("failed to write config as : %s", err.Error())
+		return fmt.Errorf("failed to write config: %w", err)
 	}
 
 	return nil
@@ -138,6 +139,7 @@ func DefaultConfig(withCosmosKey bool) Config {
 			GRPCPort: 9090,
 			Denom:    DefaultDenom,
 			ChainID:  DefaultChainID,
+			GasPrice: DefaultGasPrice,
 		},
 		PrivateKey:                 privateKey,
 		TotalValidatorNum:          0,
@@ -155,6 +157,7 @@ func updateConfig(c Config) {
 	viper.Set("FairyRingNode.grpcPort", c.FairyRingNode.GRPCPort)
 	viper.Set("FairyRingNode.denom", c.FairyRingNode.Denom)
 	viper.Set("FairyRingNode.chainID", c.FairyRingNode.ChainID)
+	viper.Set("FairyRingNode.gasPrice", c.FairyRingNode.GasPrice)
 
 	viper.Set("PrivateKey", c.PrivateKey)
 
@@ -170,6 +173,7 @@ func setInitialConfig(c Config) {
 	viper.SetDefault("FairyRingNode.grpcPort", c.FairyRingNode.GRPCPort)
 	viper.SetDefault("FairyRingNode.denom", c.FairyRingNode.Denom)
 	viper.SetDefault("FairyRingNode.chainID", c.FairyRingNode.ChainID)
+	viper.SetDefault("FairyRingNode.gasPrice", c.FairyRingNode.GasPrice)
 
 	viper.SetDefault("PrivateKey", c.PrivateKey)
 
