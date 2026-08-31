@@ -3,13 +3,14 @@ package fairyringclient
 import (
 	"encoding/hex"
 	"fairyringclient/pkg/cosmosClient"
+	"log"
+	"strings"
+
 	distIBE "github.com/FairBlock/DistributedIBE"
 	"github.com/Fairblock/fairyring/x/keyshare/types"
 	"github.com/drand/kyber"
 	bls "github.com/drand/kyber-bls12381"
 	"github.com/pkg/errors"
-	"log"
-	"strings"
 )
 
 type KeyShare struct {
@@ -45,20 +46,6 @@ func (v *ValidatorClients) RegisterValidatorSet() {
 	log.Printf("%s Registered as Validator", addr)
 }
 
-//
-//func (v *ValidatorClients) UnregisterValidatorSet() {
-//	addr := v.CosmosClient.GetAddress()
-//	_, err := validatorCosmosClient.CosmosClient.BroadcastTx(&types.MsgUnregisterValidator{
-//		Creator: addr,
-//	}, true)
-//	if err != nil {
-//		if !strings.Contains(err.Error(), "validator already unregistered") {
-//			log.Fatal(err)
-//		}
-//	}
-//	log.Printf("%s Unregistered Validator", addr)
-//}
-
 func (v *ValidatorClients) Pause() {
 	v.Paused = true
 }
@@ -72,7 +59,7 @@ func (v *ValidatorClients) SetCommitments(c *types.QueryCommitmentsResponse) {
 }
 
 func (v *ValidatorClients) IncreaseInvalidShareNum() {
-	v.InvalidShareInARow = v.InvalidShareInARow + 1
+	v.InvalidShareInARow++
 }
 
 func (v *ValidatorClients) ResetInvalidShareNum() {
@@ -105,18 +92,20 @@ func remainingBlocks(expiry uint64, height uint64) uint64 {
 
 func (v *ValidatorClients) logShareState(height uint64) {
 	if v.CurrentShare != nil {
-		log.Printf("Current Share Expires at: %d, in %d blocks | %v",
+		log.Printf(
+			"Current Share Index: %d | Expires at: %d, in %d blocks",
+			v.CurrentShare.Index,
 			v.CurrentShareExpiryBlock,
 			remainingBlocks(v.CurrentShareExpiryBlock, height),
-			v.CurrentShare.Share,
 		)
 	}
 
 	if v.PendingShare != nil {
-		log.Printf("Pending Share expires at: %d, in %d blocks | %v",
+		log.Printf(
+			"Pending Share Index: %d | Expires at: %d, in %d blocks",
+			v.PendingShare.Index,
 			v.PendingShareExpiryBlock,
 			remainingBlocks(v.PendingShareExpiryBlock, height),
-			v.PendingShare.Share,
 		)
 	}
 }
@@ -153,13 +142,13 @@ func (v *ValidatorClients) SyncCurrentShareWithChain(latestBlockHeight uint64) e
 
 		if v.PendingShare != nil && v.PendingShareExpiryBlock > latestBlockHeight {
 			v.ActivatePendingShare()
-			log.Printf("Activated locally cached pending key share, New Share: %v\n", v.CurrentShare.Share.Value.String())
+			log.Printf("Activated locally cached pending key share | Index: %d\n", v.CurrentShare.Index)
 		} else {
 			v.RemovePendingShare()
 			if err := v.UpdateKeyShareFromChain(false); err != nil {
 				return err
 			}
-			log.Printf("Fetched active key share from chain, New Share: %v\n", v.CurrentShare.Share.Value.String())
+			log.Printf("Fetched active key share from chain | Index: %d\n", v.CurrentShare.Index)
 		}
 
 		v.resetAfterShareSwitch()
@@ -193,7 +182,7 @@ func (v *ValidatorClients) PrepareShareForTargetHeight(targetHeight uint64) erro
 
 		v.ActivatePendingShare()
 		v.resetAfterShareSwitch()
-		log.Printf("Activated pending key share, New Share: %v\n", v.CurrentShare.Share.Value.String())
+		log.Printf("Activated pending key share | Index: %d\n", v.CurrentShare.Index)
 	}
 
 	return nil
@@ -206,7 +195,7 @@ func (v *ValidatorClients) UpdateKeyShareFromChain(forNextRound bool) error {
 	}
 
 	commits, err := v.CosmosClient.GetCommitments()
-	for err != nil {
+	if err != nil {
 		return err
 	}
 
@@ -238,7 +227,6 @@ func (v *ValidatorClients) UpdateKeyShareFromChain(forNextRound bool) error {
 	}
 
 	v.Commitments = commits
-
 	return nil
 }
 
@@ -261,7 +249,6 @@ func (v *ValidatorClients) VerifyShare(commitments *types.Commitments, verifyPen
 	}
 
 	targetShare := v.CurrentShare
-
 	if targetShare == nil {
 		return false, errors.New("active share not found")
 	}
@@ -283,8 +270,7 @@ func (v *ValidatorClients) VerifyShare(commitments *types.Commitments, verifyPen
 	}
 
 	newCommitmentPoint := s.G1().Point()
-	err = newCommitmentPoint.UnmarshalBinary(newByteCommitment)
-	if err != nil {
+	if err = newCommitmentPoint.UnmarshalBinary(newByteCommitment); err != nil {
 		return false, err
 	}
 
@@ -298,7 +284,7 @@ func (v *ValidatorClients) VerifyShare(commitments *types.Commitments, verifyPen
 		return false, errors.New("unable to create hashable G2 point")
 	}
 
-	Qid := hG2.Hash([]byte("verifying"))
+	qid := hG2.Hash([]byte("verifying"))
 
-	return distIBE.VerifyShare(s, newCommitment, extracted, Qid), nil
+	return distIBE.VerifyShare(s, newCommitment, extracted, qid), nil
 }
